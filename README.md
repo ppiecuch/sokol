@@ -148,6 +148,28 @@ int main() {
 }
 ```
 
+# Qt integration
+
+Sokol integrates easily and very well with Qt. See `demo.cpp`.
+
+```
+class Window : public QWindow, protected QOpenGLFunctions
+{
+    Q_OBJECT
+
+# define SOKOL_CLASS_IMPL
+# define SOKOL_NO_FUNC_PROTO
+# define SOKOL_GLCORE33
+# include <sokol_gfx.h>
+
+...
+```
+
+`SOKOL_CLASS_IMPL` informs, that Sokol will be part of the class definition.
+`SOKOL_NO_FUNC_PROTO` informs that we put functions` definitions (insted of functions` declarations) in class.
+
+Now all Sokol functions are visible in the `Window` class.
+
 # sokol_app.h
 
 A minimal cross-platform application-wrapper library:
