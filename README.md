@@ -167,7 +167,7 @@ class Window : public QWindow, protected QOpenGLFunctions
 
 `SOKOL_CLASS_IMPL` informs, that Sokol will be part of the class definition.
 
-`SOKOL_NO_FUNC_PROTO` informs that we put functions` definitions (insted of functions` declarations) in class.
+`SOKOL_NO_FUNC_PROTO` informs that we put definitions of functions (insted of declarations) in class.
 
 Now all Sokol functions are visible in the `Window` class.
 
