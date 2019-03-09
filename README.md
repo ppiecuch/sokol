@@ -150,9 +150,9 @@ int main() {
 
 # Qt integration
 
-Sokol integrates easily and very well with Qt. See `demo.cpp`.
+Sokol integrates easily and very well with _Qt_. See `demo.cpp` in qmake folder.
 
-```
+```cpp
 class Window : public QWindow, protected QOpenGLFunctions
 {
     Q_OBJECT
@@ -166,6 +166,7 @@ class Window : public QWindow, protected QOpenGLFunctions
 ```
 
 `SOKOL_CLASS_IMPL` informs, that Sokol will be part of the class definition.
+
 `SOKOL_NO_FUNC_PROTO` informs that we put functions` definitions (insted of functions` declarations) in class.
 
 Now all Sokol functions are visible in the `Window` class.

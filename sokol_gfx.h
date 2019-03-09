@@ -100,7 +100,7 @@
 
     --- start rendering to the default frame buffer with:
 
-            sg_begin_default_pass(const sg_pass_action* actions, int width, int height)
+            sg_begin_default_pass(const sg_pass_action* actions, int width, int height, float scale)
 
     --- or start rendering to an offscreen framebuffer with:
 
@@ -409,11 +409,17 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#ifndef SOKOL_API_DECL
-    #define SOKOL_API_DECL extern
+#if defined(SOKOL_CLASS_IMPL) && !defined(SOKOL_IMPL)
+    #define SOKOL_IMPL
 #endif
 
-#ifdef __cplusplus
+#if !defined(SOKOL_API_DECL) && !defined(SOKOL_IMPL)
+    #define SOKOL_API_DECL extern
+#else
+    #define SOKOL_API_DECL
+#endif
+
+#if defined(__cplusplus) && !defined(SOKOL_CLASS_IMPL)
 extern "C" {
 #endif
 
@@ -1656,6 +1662,7 @@ typedef struct sg_desc {
     uint32_t _end_canary;
 } sg_desc;
 
+#ifndef SOKOL_NO_FUNC_PROTO
 /* setup and misc functions */
 SOKOL_API_DECL void sg_setup(const sg_desc* desc);
 SOKOL_API_DECL void sg_shutdown(void);
@@ -1690,7 +1697,7 @@ SOKOL_API_DECL sg_resource_state sg_query_pipeline_state(sg_pipeline pip);
 SOKOL_API_DECL sg_resource_state sg_query_pass_state(sg_pass pass);
 
 /* rendering functions */
-SOKOL_API_DECL void sg_begin_default_pass(const sg_pass_action* pass_action, int width, int height);
+SOKOL_API_DECL void sg_begin_default_pass(const sg_pass_action* pass_action, int width, int height, float scale);
 SOKOL_API_DECL void sg_begin_pass(sg_pass pass, const sg_pass_action* pass_action);
 SOKOL_API_DECL void sg_apply_viewport(int x, int y, int width, int height, bool origin_top_left);
 SOKOL_API_DECL void sg_apply_scissor_rect(int x, int y, int width, int height, bool origin_top_left);
@@ -1723,6 +1730,8 @@ SOKOL_API_DECL sg_context sg_setup_context(void);
 SOKOL_API_DECL void sg_activate_context(sg_context ctx_id);
 SOKOL_API_DECL void sg_discard_context(sg_context ctx_id);
 
+#endif /* SOKOL_NO_FUNC_PROTO */
+
 /* deprecated structs and functions */
 #ifndef SOKOL_NO_DEPRECATED
 typedef struct sg_draw_state {
@@ -1736,14 +1745,16 @@ typedef struct sg_draw_state {
     sg_image fs_images[SG_MAX_SHADERSTAGE_IMAGES];
     uint32_t _end_canary;
 } sg_draw_state;
+#ifndef SOKOL_NO_FUNC_PROTO
 SOKOL_API_DECL void sg_apply_draw_state(const sg_draw_state* ds);
 SOKOL_API_DECL void sg_apply_uniform_block(sg_shader_stage stage, int ub_index, const void* data, int num_bytes);
+#endif /* SOKOL_NO_FUNC_PROTO */
 #endif
 
 #ifdef _MSC_VER
 #pragma warning(pop)
 #endif
-#ifdef __cplusplus
+#if defined(__cplusplus) && !defined(SOKOL_CLASS_IMPL)
 } /* extern "C" */
 #endif
 
@@ -1763,7 +1774,9 @@ SOKOL_API_DECL void sg_apply_uniform_block(sg_shader_stage stage, int ub_index, 
     #endif
 #endif
 #ifndef SOKOL_ASSERT
-    #include <assert.h>
+    #ifndef SOKOL_CLASS_IMPL
+        #include <assert.h>
+    #endif
     #define SOKOL_ASSERT(c) assert(c)
 #endif
 #ifndef SOKOL_VALIDATE_BEGIN
@@ -1792,12 +1805,14 @@ SOKOL_API_DECL void sg_apply_uniform_block(sg_shader_stage stage, int ub_index, 
     #endif
 #endif
 
-#ifndef _SOKOL_PRIVATE
+#if !defined(_SOKOL_PRIVATE) && !defined(SOKOL_CLASS_IMPL)
     #if defined(__GNUC__)
         #define _SOKOL_PRIVATE __attribute__((unused)) static
     #else
         #define _SOKOL_PRIVATE static
     #endif
+#else
+        #define _SOKOL_PRIVATE
 #endif
 
 #ifndef _SOKOL_UNUSED
@@ -2744,7 +2759,11 @@ typedef struct {
     sg_trace_hooks hooks;
     #endif
 } _sg_state_t;
+#ifdef SOKOL_CLASS_IMPL
+_sg_state_t _sg;
+#else
 static _sg_state_t _sg;
+#endif
 
 /*-- helper functions --------------------------------------------------------*/
 
@@ -4573,7 +4592,7 @@ _SOKOL_PRIVATE void _sg_destroy_pass(_sg_pass_t* pass) {
 }
 
 /*-- GL backend rendering functions ------------------------------------------*/
-_SOKOL_PRIVATE void _sg_begin_pass(_sg_pass_t* pass, const sg_pass_action* action, int w, int h) {
+_SOKOL_PRIVATE void _sg_begin_pass(_sg_pass_t* pass, const sg_pass_action* action, int w, int h, float scale) {
     /* FIXME: what if a texture used as render target is still bound, should we
        unbind all currently bound textures in begin pass? */
     SOKOL_ASSERT(action);
@@ -4619,8 +4638,8 @@ _SOKOL_PRIVATE void _sg_begin_pass(_sg_pass_t* pass, const sg_pass_action* actio
         SOKOL_ASSERT(_sg.gl.cur_context);
         glBindFramebuffer(GL_FRAMEBUFFER, _sg.gl.cur_context->default_framebuffer);
     }
-    glViewport(0, 0, w, h);
-    glScissor(0, 0, w, h);
+    glViewport(0, 0, w*scale, h*scale);
+    glScissor(0, 0, w*scale, h*scale);
     bool need_pip_cache_flush = false;
     if (_sg.gl.cache.blend.color_write_mask != SG_COLORMASK_RGBA) {
         need_pip_cache_flush = true;
@@ -6227,7 +6246,7 @@ _SOKOL_PRIVATE void _sg_destroy_pass(_sg_pass_t* pass) {
     }
 }
 
-_SOKOL_PRIVATE void _sg_begin_pass(_sg_pass_t* pass, const sg_pass_action* action, int w, int h) {
+_SOKOL_PRIVATE void _sg_begin_pass(_sg_pass_t* pass, const sg_pass_action* action, int w, int h, float scale) {
     SOKOL_ASSERT(action);
     SOKOL_ASSERT(!_sg.d3d11.in_pass);
     _sg.d3d11.in_pass = true;
@@ -7651,7 +7670,7 @@ _SOKOL_PRIVATE void _sg_destroy_pass(_sg_pass_t* pass) {
     _SOKOL_UNUSED(pass);
 }
 
-_SOKOL_PRIVATE void _sg_begin_pass(_sg_pass_t* pass, const sg_pass_action* action, int w, int h) {
+_SOKOL_PRIVATE void _sg_begin_pass(_sg_pass_t* pass, const sg_pass_action* action, int w, int h, float scale) {
     SOKOL_ASSERT(action);
     SOKOL_ASSERT(!_sg.mtl.in_pass);
     SOKOL_ASSERT(_sg_mtl_cmd_queue);
@@ -9609,15 +9628,15 @@ SOKOL_API_IMPL void sg_destroy_pass(sg_pass pass_id) {
     _SG_TRACE_ARGS(destroy_pass, pass_id);
 }
 
-SOKOL_API_IMPL void sg_begin_default_pass(const sg_pass_action* pass_action, int width, int height) {
+SOKOL_API_IMPL void sg_begin_default_pass(const sg_pass_action* pass_action, int width, int height, float scale) {
     SOKOL_ASSERT(pass_action);
     SOKOL_ASSERT((pass_action->_start_canary == 0) && (pass_action->_end_canary == 0));
     sg_pass_action pa;
     _sg_resolve_default_pass_action(pass_action, &pa);
     _sg.cur_pass.id = SG_INVALID_ID;
     _sg.pass_valid = true;
-    _sg_begin_pass(0, &pa, width, height);
-    _SG_TRACE_ARGS(begin_default_pass, pass_action, width, height);
+    _sg_begin_pass(0, &pa, width, height, scale);
+    _SG_TRACE_ARGS(begin_default_pass, pass_action, width, height, scale);
 }
 
 SOKOL_API_IMPL void sg_begin_pass(sg_pass pass_id, const sg_pass_action* pass_action) {
@@ -9631,7 +9650,7 @@ SOKOL_API_IMPL void sg_begin_pass(sg_pass pass_id, const sg_pass_action* pass_ac
         _sg_resolve_default_pass_action(pass_action, &pa);
         const int w = pass->color_atts[0].image->width;
         const int h = pass->color_atts[0].image->height;
-        _sg_begin_pass(pass, &pa, w, h);
+        _sg_begin_pass(pass, &pa, w, h, 1);
         _SG_TRACE_ARGS(begin_pass, pass_id, pass_action);
     }
     else {
