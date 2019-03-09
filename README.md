@@ -148,7 +148,7 @@ int main() {
 }
 ```
 
-# Qt integration
+## Qt integration
 
 Sokol integrates easily and very well with _Qt_. See `demo.cpp` in qmake folder.
 
