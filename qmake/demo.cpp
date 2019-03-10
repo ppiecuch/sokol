@@ -51,7 +51,6 @@ class Window : public QWindow, protected QOpenGLFunctions
     Q_OBJECT
 
 # define SOKOL_CLASS_IMPL
-# define SOKOL_NO_FUNC_PROTO
 # define SOKOL_GLCORE33
 # include <sokol_gfx.h>
 

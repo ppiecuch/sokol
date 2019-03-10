@@ -409,6 +409,10 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#if defined(SOKOL_CLASS_IMPL) && defined(SOKOL_CLASS_PROTO)
+    #error "Both SOKOL_CLASS_IMPL and SOKOL_CLASS_PROTO are defined"
+#endif
+
 #if defined(SOKOL_CLASS_IMPL) && !defined(SOKOL_IMPL)
     #define SOKOL_IMPL
 #endif
@@ -419,7 +423,7 @@
     #define SOKOL_API_DECL
 #endif
 
-#if defined(__cplusplus) && !defined(SOKOL_CLASS_IMPL)
+#if defined(__cplusplus) && !defined(SOKOL_CLASS_IMPL) && !defined(SOKOL_CLASS_PROTO)
 extern "C" {
 #endif
 
@@ -1662,7 +1666,7 @@ typedef struct sg_desc {
     uint32_t _end_canary;
 } sg_desc;
 
-#ifndef SOKOL_NO_FUNC_PROTO
+#ifndef SOKOL_CLASS_IMPL
 /* setup and misc functions */
 SOKOL_API_DECL void sg_setup(const sg_desc* desc);
 SOKOL_API_DECL void sg_shutdown(void);
@@ -1730,7 +1734,7 @@ SOKOL_API_DECL sg_context sg_setup_context(void);
 SOKOL_API_DECL void sg_activate_context(sg_context ctx_id);
 SOKOL_API_DECL void sg_discard_context(sg_context ctx_id);
 
-#endif /* SOKOL_NO_FUNC_PROTO */
+#endif /* SOKOL_CLASS_IMPL */
 
 /* deprecated structs and functions */
 #ifndef SOKOL_NO_DEPRECATED
@@ -1745,16 +1749,16 @@ typedef struct sg_draw_state {
     sg_image fs_images[SG_MAX_SHADERSTAGE_IMAGES];
     uint32_t _end_canary;
 } sg_draw_state;
-#ifndef SOKOL_NO_FUNC_PROTO
+#ifndef SOKOL_CLASS_IMPL
 SOKOL_API_DECL void sg_apply_draw_state(const sg_draw_state* ds);
 SOKOL_API_DECL void sg_apply_uniform_block(sg_shader_stage stage, int ub_index, const void* data, int num_bytes);
-#endif /* SOKOL_NO_FUNC_PROTO */
+#endif /* SOKOL_CLASS_IMPL */
 #endif
 
 #ifdef _MSC_VER
 #pragma warning(pop)
 #endif
-#if defined(__cplusplus) && !defined(SOKOL_CLASS_IMPL)
+#if defined(__cplusplus) && !defined(SOKOL_CLASS_IMPL) && !defined(SOKOL_CLASS_PROTO)
 } /* extern "C" */
 #endif
 
