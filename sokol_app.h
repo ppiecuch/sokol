@@ -382,6 +382,7 @@
         3. This notice may not be removed or altered from any source
         distribution.
 */
+#define SOKOL_APP_INCLUDED (1)
 #include <stdint.h>
 #include <stdbool.h>
 
@@ -659,6 +660,7 @@ SOKOL_API_DECL int sapp_run(const sapp_desc* desc);
 
 /*-- IMPLEMENTATION ----------------------------------------------------------*/
 #ifdef SOKOL_IMPL
+#define SOKOL_APP_IMPL_INCLUDED (1)
 
 #ifdef _MSC_VER
 #pragma warning(push)
@@ -820,14 +822,17 @@ _SOKOL_PRIVATE void _sapp_call_init(void) {
     else if (_sapp.desc.init_userdata_cb) {
         _sapp.desc.init_userdata_cb(_sapp.desc.user_data);
     }
+    _sapp.init_called = true;
 }
 
 _SOKOL_PRIVATE void _sapp_call_frame(void) {
-    if (_sapp.desc.frame_cb) {
-        _sapp.desc.frame_cb();
-    }
-    else if (_sapp.desc.frame_userdata_cb) {
-        _sapp.desc.frame_userdata_cb(_sapp.desc.user_data);
+    if (_sapp.init_called && !_sapp.cleanup_called) {
+        if (_sapp.desc.frame_cb) {
+            _sapp.desc.frame_cb();
+        }
+        else if (_sapp.desc.frame_userdata_cb) {
+            _sapp.desc.frame_userdata_cb(_sapp.desc.user_data);
+        }
     }
 }
 
@@ -838,6 +843,7 @@ _SOKOL_PRIVATE void _sapp_call_cleanup(void) {
     else if (_sapp.desc.cleanup_userdata_cb) {
         _sapp.desc.cleanup_userdata_cb(_sapp.desc.user_data);
     }
+    _sapp.cleanup_called = true;
 }
 
 _SOKOL_PRIVATE void _sapp_call_event(const sapp_event* e) {
@@ -916,7 +922,6 @@ _SOKOL_PRIVATE void _sapp_frame(void) {
     if (_sapp.first_frame) {
         _sapp.first_frame = false;
         _sapp_call_init();
-        _sapp.init_called = true;
     }
     _sapp_call_frame();
     _sapp.frame_count++;
@@ -933,6 +938,9 @@ _SOKOL_PRIVATE void _sapp_frame(void) {
 #import <Metal/Metal.h>
 #import <MetalKit/MetalKit.h>
 #elif defined(SOKOL_GLCORE33)
+#ifndef GL_SILENCE_DEPRECATION
+#define GL_SILENCE_DEPRECATION
+#endif
 #include <Cocoa/Cocoa.h>
 #include <OpenGL/gl3.h>
 #endif
@@ -1215,8 +1223,6 @@ _SOKOL_PRIVATE void _sapp_macos_frame(void) {
         _sapp_macos_window_obj.contentView = _sapp_view_obj;
         [_sapp_macos_window_obj makeFirstResponder:_sapp_view_obj];
 
-        _sapp_macos_update_dimensions();
-
         _sapp_macos_timer_obj = [NSTimer timerWithTimeInterval:0.001
             target:_sapp_view_obj
             selector:@selector(timerFired:)
@@ -1224,14 +1230,15 @@ _SOKOL_PRIVATE void _sapp_macos_frame(void) {
             repeats:YES];
         [[NSRunLoop currentRunLoop] addTimer:_sapp_macos_timer_obj forMode:NSDefaultRunLoopMode];
     #endif
+    _sapp.valid = true;
     if (_sapp.desc.fullscreen) {
+        /* on GL, this already toggles a rendered frame, so set the valid flag before */
         [_sapp_macos_window_obj toggleFullScreen:self];
     }
     else {
         [_sapp_macos_window_obj center];
     }
     [_sapp_macos_window_obj makeKeyAndOrderFront:nil];
-    _sapp.valid = true;
 }
 
 - (BOOL)applicationShouldTerminateAfterLastWindowClosed:(NSApplication*)sender {
@@ -1322,9 +1329,10 @@ _SOKOL_PRIVATE void _sapp_macos_app_event(sapp_event_type type) {
     [self setNeedsDisplay:YES];
 }
 - (void)prepareOpenGL {
+    [super prepareOpenGL];
     GLint swapInt = 1;
     NSOpenGLContext* ctx = [_sapp_view_obj openGLContext];
-    [ctx setValues:&swapInt forParameter:NSOpenGLCPSwapInterval];
+    [ctx setValues:&swapInt forParameter:NSOpenGLContextParameterSwapInterval];
     [ctx makeCurrentContext];
 }
 - (void)drawRect:(NSRect)bound {
@@ -2558,6 +2566,11 @@ _SOKOL_PRIVATE const _sapp_gl_fbconfig* _sapp_gl_choose_fbconfig(const _sapp_gl_
 #pragma comment (lib, "d3d11.lib")
 #pragma comment (lib, "dxguid.lib")
 #endif
+#endif
+
+/* see https://github.com/floooh/sokol/issues/138 */
+#ifndef WM_MOUSEHWHEEL
+#define WM_MOUSEHWHEEL (0x020E)
 #endif
 
 #ifndef DPI_ENUMS_DECLARED
@@ -4367,7 +4380,6 @@ _SOKOL_PRIVATE void _sapp_android_cleanup(void) {
         if (_sapp.init_called && !_sapp.cleanup_called) {
             SOKOL_LOG("cleanup_cb()");
             _sapp_call_cleanup();
-            _sapp.cleanup_called = true;
         }
     }
     /* always try to cleanup by destroying egl context */
@@ -6006,11 +6018,11 @@ _SOKOL_PRIVATE GLXFBConfig _sapp_glx_choosefbconfig() {
         _sapp_gl_init_fbconfig(u);
 
         /* Only consider RGBA GLXFBConfigs */
-        if (!_sapp_glx_attrib(n, GLX_RENDER_TYPE) & GLX_RGBA_BIT) {
+        if (0 == (_sapp_glx_attrib(n, GLX_RENDER_TYPE) & GLX_RGBA_BIT)) {
             continue;
         }
         /* Only consider window GLXFBConfigs */
-        if (!_sapp_glx_attrib(n, GLX_DRAWABLE_TYPE) & GLX_WINDOW_BIT) {
+        if (0 == (_sapp_glx_attrib(n, GLX_DRAWABLE_TYPE) & GLX_WINDOW_BIT)) {
             if (trust_window_bit) {
                 continue;
             }
