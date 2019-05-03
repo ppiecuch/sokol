@@ -674,7 +674,9 @@ SOKOL_API_DECL int sapp_run(const sapp_desc* desc);
 #include <string.h> /* memset */
 
 /* check if the config defines are alright */
-#if defined(__APPLE__)
+#if defined(QT_GUI_LIB)
+
+#elif defined(__APPLE__)
     #if !__has_feature(objc_arc)
         #error "sokol_app.h requires ARC (Automatic Reference Counting) on MacOS and iOS"
     #endif
@@ -926,6 +928,641 @@ _SOKOL_PRIVATE void _sapp_frame(void) {
     _sapp_call_frame();
     _sapp.frame_count++;
 }
+
+/*== Qt Gui ==================================================================*/
+
+#if defined(QT_GUI_LIB) || defined(QT_WIDGETS_LIB)
+
+#include <qdebug.h>
+#include <qstack.h>
+#include <qevent.h>
+#include <qkeyevent.h>
+#include <qopenglcontext.h>
+#include <qopenglfunctions.h>
+#include <qopenglextrafunctions.h>
+
+typedef unsigned int  GLenum;
+typedef unsigned int  GLuint;
+typedef int  GLsizei;
+typedef char  GLchar;
+typedef ptrdiff_t  GLintptr;
+typedef ptrdiff_t  GLsizeiptr;
+typedef double  GLclampd;
+typedef unsigned short  GLushort;
+typedef unsigned char  GLubyte;
+typedef unsigned char  GLboolean;
+typedef uint64_t  GLuint64;
+typedef double  GLdouble;
+typedef unsigned short  GLhalf;
+typedef float  GLclampf;
+typedef unsigned int  GLbitfield;
+typedef signed char  GLbyte;
+typedef short  GLshort;
+typedef void  GLvoid;
+typedef int64_t  GLint64;
+typedef float  GLfloat;
+typedef struct __GLsync * GLsync;
+typedef int  GLint;
+
+#define GL_INT_2_10_10_10_REV 0x8D9F
+#define GL_R32F 0x822E
+#define GL_PROGRAM_POINT_SIZE 0x8642
+#define GL_STENCIL_ATTACHMENT 0x8D20
+#define GL_DEPTH_ATTACHMENT 0x8D00
+#define GL_COLOR_ATTACHMENT2 0x8CE2
+#define GL_COLOR_ATTACHMENT0 0x8CE0
+#define GL_R16F 0x822D
+#define GL_COLOR_ATTACHMENT22 0x8CF6
+#define GL_DRAW_FRAMEBUFFER 0x8CA9
+#define GL_FRAMEBUFFER_COMPLETE 0x8CD5
+#define GL_NUM_EXTENSIONS 0x821D
+#define GL_INFO_LOG_LENGTH 0x8B84
+#define GL_VERTEX_SHADER 0x8B31
+#define GL_INCR 0x1E02
+#define GL_DYNAMIC_DRAW 0x88E8
+#define GL_STATIC_DRAW 0x88E4
+#define GL_TEXTURE_CUBE_MAP_POSITIVE_Z 0x8519
+#define GL_TEXTURE_CUBE_MAP 0x8513
+#define GL_FUNC_SUBTRACT 0x800A
+#define GL_FUNC_REVERSE_SUBTRACT 0x800B
+#define GL_CONSTANT_COLOR 0x8001
+#define GL_DECR_WRAP 0x8508
+#define GL_R8 0x8229
+#define GL_LINEAR_MIPMAP_LINEAR 0x2703
+#define GL_ELEMENT_ARRAY_BUFFER 0x8893
+#define GL_SHORT 0x1402
+#define GL_DEPTH_TEST 0x0B71
+#define GL_TEXTURE_CUBE_MAP_NEGATIVE_Y 0x8518
+#define GL_LINK_STATUS 0x8B82
+#define GL_TEXTURE_CUBE_MAP_POSITIVE_Y 0x8517
+#define GL_SAMPLE_ALPHA_TO_COVERAGE 0x809E
+#define GL_RGBA16F 0x881A
+#define GL_CONSTANT_ALPHA 0x8003
+#define GL_READ_FRAMEBUFFER 0x8CA8
+#define GL_TEXTURE0 0x84C0
+#define GL_TEXTURE_MIN_LOD 0x813A
+#define GL_CLAMP_TO_EDGE 0x812F
+#define GL_UNSIGNED_SHORT_5_6_5 0x8363
+#define GL_TEXTURE_WRAP_R 0x8072
+#define GL_UNSIGNED_SHORT_5_5_5_1 0x8034
+#define GL_NEAREST_MIPMAP_NEAREST 0x2700
+#define GL_UNSIGNED_SHORT_4_4_4_4 0x8033
+#define GL_SRC_ALPHA_SATURATE 0x0308
+#define GL_STREAM_DRAW 0x88E0
+#define GL_ONE 1
+#define GL_NEAREST_MIPMAP_LINEAR 0x2702
+#define GL_RGB10_A2 0x8059
+#define GL_RGBA8 0x8058
+#define GL_COLOR_ATTACHMENT1 0x8CE1
+#define GL_RGBA4 0x8056
+#define GL_RGB8 0x8051
+#define GL_ARRAY_BUFFER 0x8892
+#define GL_STENCIL 0x1802
+#define GL_TEXTURE_2D 0x0DE1
+#define GL_DEPTH 0x1801
+#define GL_FRONT 0x0404
+#define GL_STENCIL_BUFFER_BIT 0x00000400
+#define GL_REPEAT 0x2901
+#define GL_RGBA 0x1908
+#define GL_TEXTURE_CUBE_MAP_POSITIVE_X 0x8515
+#define GL_DECR 0x1E03
+#define GL_FRAGMENT_SHADER 0x8B30
+#define GL_FLOAT 0x1406
+#define GL_TEXTURE_MAX_LOD 0x813B
+#define GL_DEPTH_COMPONENT 0x1902
+#define GL_ONE_MINUS_DST_ALPHA 0x0305
+#define GL_COLOR 0x1800
+#define GL_TEXTURE_2D_ARRAY 0x8C1A
+#define GL_TRIANGLES 0x0004
+#define GL_UNSIGNED_BYTE 0x1401
+#define GL_TEXTURE_MAG_FILTER 0x2800
+#define GL_ONE_MINUS_CONSTANT_ALPHA 0x8004
+#define GL_NONE 0
+#define GL_SRC_COLOR 0x0300
+#define GL_BYTE 0x1400
+#define GL_TEXTURE_CUBE_MAP_NEGATIVE_Z 0x851A
+#define GL_LINE_STRIP 0x0003
+#define GL_TEXTURE_3D 0x806F
+#define GL_CW 0x0900
+#define GL_LINEAR 0x2601
+#define GL_RENDERBUFFER 0x8D41
+#define GL_GEQUAL 0x0206
+#define GL_COLOR_BUFFER_BIT 0x00004000
+#define GL_RGBA32F 0x8814
+#define GL_BLEND 0x0BE2
+#define GL_ONE_MINUS_SRC_ALPHA 0x0303
+#define GL_ONE_MINUS_CONSTANT_COLOR 0x8002
+#define GL_TEXTURE_WRAP_T 0x2803
+#define GL_TEXTURE_WRAP_S 0x2802
+#define GL_TEXTURE_MIN_FILTER 0x2801
+#define GL_LINEAR_MIPMAP_NEAREST 0x2701
+#define GL_EXTENSIONS 0x1F03
+#define GL_NO_ERROR 0
+#define GL_REPLACE 0x1E01
+#define GL_KEEP 0x1E00
+#define GL_CCW 0x0901
+#define GL_TEXTURE_CUBE_MAP_NEGATIVE_X 0x8516
+#define GL_RGB 0x1907
+#define GL_TRIANGLE_STRIP 0x0005
+#define GL_FALSE 0
+#define GL_ZERO 0
+#define GL_CULL_FACE 0x0B44
+#define GL_INVERT 0x150A
+#define GL_UNSIGNED_INT 0x1405
+#define GL_UNSIGNED_SHORT 0x1403
+#define GL_NEAREST 0x2600
+#define GL_SCISSOR_TEST 0x0C11
+#define GL_LEQUAL 0x0203
+#define GL_STENCIL_TEST 0x0B90
+#define GL_DITHER 0x0BD0
+#define GL_DEPTH_COMPONENT16 0x81A5
+#define GL_EQUAL 0x0202
+#define GL_FRAMEBUFFER 0x8D40
+#define GL_RGB5 0x8050
+#define GL_LINES 0x0001
+#define GL_DEPTH_BUFFER_BIT 0x00000100
+#define GL_SRC_ALPHA 0x0302
+#define GL_INCR_WRAP 0x8507
+#define GL_LESS 0x0201
+#define GL_MULTISAMPLE 0x809D
+#define GL_FRAMEBUFFER_BINDING 0x8CA6
+#define GL_BACK 0x0405
+#define GL_ALWAYS 0x0207
+#define GL_FUNC_ADD 0x8006
+#define GL_ONE_MINUS_DST_COLOR 0x0307
+#define GL_NOTEQUAL 0x0205
+#define GL_DST_COLOR 0x0306
+#define GL_COMPILE_STATUS 0x8B81
+#define GL_RED 0x1903
+#define GL_COLOR_ATTACHMENT3 0x8CE3
+#define GL_DST_ALPHA 0x0304
+#define GL_RGB5_A1 0x8057
+#define GL_GREATER 0x0204
+#define GL_POLYGON_OFFSET_FILL 0x8037
+#define GL_TRUE 1
+#define GL_NEVER 0x0200
+#define GL_POINTS 0x0000
+#define GL_ONE_MINUS_SRC_COLOR 0x0301
+#define GL_MIRRORED_REPEAT 0x8370
+
+#define _SAPP_QT_PROC(name) QOpenGLContext::currentContext()->extraFunctions()->name
+
+#define glBindVertexArray _SAPP_QT_PROC(glBindVertexArray)
+#define glFramebufferTextureLayer _SAPP_QT_PROC(glFramebufferTextureLayer)
+#define glGenFramebuffers _SAPP_QT_PROC(glGenFramebuffers)
+#define glBindFramebuffer _SAPP_QT_PROC(glBindFramebuffer)
+#define glBindRenderbuffer _SAPP_QT_PROC(glBindRenderbuffer)
+#define glGetStringi _SAPP_QT_PROC(glGetStringi)
+#define glClearBufferfi _SAPP_QT_PROC(glClearBufferfi)
+#define glClearBufferfv _SAPP_QT_PROC(glClearBufferfv)
+#define glClearBufferuiv _SAPP_QT_PROC(glClearBufferuiv)
+#define glDeleteRenderbuffers _SAPP_QT_PROC(glDeleteRenderbuffers)
+#define glUniform4fv _SAPP_QT_PROC(glUniform4fv)
+#define glUniform2fv _SAPP_QT_PROC(glUniform2fv)
+#define glUseProgram _SAPP_QT_PROC(glUseProgram)
+#define glShaderSource _SAPP_QT_PROC(glShaderSource)
+#define glLinkProgram _SAPP_QT_PROC(glLinkProgram)
+#define glGetUniformLocation _SAPP_QT_PROC(glGetUniformLocation)
+#define glGetShaderiv _SAPP_QT_PROC(glGetShaderiv)
+#define glGetProgramInfoLog _SAPP_QT_PROC(glGetProgramInfoLog)
+#define glGetAttribLocation _SAPP_QT_PROC(glGetAttribLocation)
+#define glDisableVertexAttribArray _SAPP_QT_PROC(glDisableVertexAttribArray)
+#define glDeleteShader _SAPP_QT_PROC(glDeleteShader)
+#define glDeleteProgram _SAPP_QT_PROC(glDeleteProgram)
+#define glCompileShader _SAPP_QT_PROC(glCompileShader)
+#define glStencilFuncSeparate _SAPP_QT_PROC(glStencilFuncSeparate)
+#define glStencilOpSeparate _SAPP_QT_PROC(glStencilOpSeparate)
+#define glRenderbufferStorageMultisample _SAPP_QT_PROC(glRenderbufferStorageMultisample)
+#define glDrawBuffers _SAPP_QT_PROC(glDrawBuffers)
+#define glVertexAttribDivisor _SAPP_QT_PROC(glVertexAttribDivisor)
+#define glBufferSubData _SAPP_QT_PROC(glBufferSubData)
+#define glGenBuffers _SAPP_QT_PROC(glGenBuffers)
+#define glCheckFramebufferStatus _SAPP_QT_PROC(glCheckFramebufferStatus)
+#define glFramebufferRenderbuffer _SAPP_QT_PROC(glFramebufferRenderbuffer)
+#define glCompressedTexImage2D _SAPP_QT_PROC(glCompressedTexImage2D)
+#define glCompressedTexImage3D _SAPP_QT_PROC(glCompressedTexImage3D)
+#define glActiveTexture _SAPP_QT_PROC(glActiveTexture)
+#define glTexSubImage3D _SAPP_QT_PROC(glTexSubImage3D)
+#define glUniformMatrix4fv _SAPP_QT_PROC(glUniformMatrix4fv)
+#define glRenderbufferStorage _SAPP_QT_PROC(glRenderbufferStorage)
+#define glGenTextures _SAPP_QT_PROC(glGenTextures)
+#define glPolygonOffset _SAPP_QT_PROC(glPolygonOffset)
+#define glDrawElements _SAPP_QT_PROC(glDrawElements)
+#define glDeleteFramebuffers _SAPP_QT_PROC(glDeleteFramebuffers)
+#define glBlendEquationSeparate _SAPP_QT_PROC(glBlendEquationSeparate)
+#define glDeleteTextures _SAPP_QT_PROC(glDeleteTextures)
+#define glGetProgramiv _SAPP_QT_PROC(glGetProgramiv)
+#define glBindTexture _SAPP_QT_PROC(glBindTexture)
+#define glTexImage3D _SAPP_QT_PROC(glTexImage3D)
+#define glCreateShader _SAPP_QT_PROC(glCreateShader)
+#define glTexSubImage2D _SAPP_QT_PROC(glTexSubImage2D)
+#define glClearDepth _SAPP_QT_PROC(glClearDepthf)
+#define glFramebufferTexture2D _SAPP_QT_PROC(glFramebufferTexture2D)
+#define glCreateProgram _SAPP_QT_PROC(glCreateProgram)
+#define glViewport _SAPP_QT_PROC(glViewport)
+#define glDeleteBuffers _SAPP_QT_PROC(glDeleteBuffers)
+#define glDrawArrays _SAPP_QT_PROC(glDrawArrays)
+#define glDrawElementsInstanced _SAPP_QT_PROC(glDrawElementsInstanced)
+#define glVertexAttribPointer _SAPP_QT_PROC(glVertexAttribPointer)
+#define glUniform1i _SAPP_QT_PROC(glUniform1i)
+#define glDisable _SAPP_QT_PROC(glDisable)
+#define glColorMask _SAPP_QT_PROC(glColorMask)
+#define glBindBuffer _SAPP_QT_PROC(glBindBuffer)
+#define glDeleteVertexArrays _SAPP_QT_PROC(glDeleteVertexArrays)
+#define glDepthMask _SAPP_QT_PROC(glDepthMask)
+#define glDrawArraysInstanced _SAPP_QT_PROC(glDrawArraysInstanced)
+#define glClearStencil _SAPP_QT_PROC(glClearStencil)
+#define glScissor _SAPP_QT_PROC(glScissor)
+#define glUniform3fv _SAPP_QT_PROC(glUniform3fv)
+#define glGenRenderbuffers _SAPP_QT_PROC(glGenRenderbuffers)
+#define glBufferData _SAPP_QT_PROC(glBufferData)
+#define glBlendFuncSeparate _SAPP_QT_PROC(glBlendFuncSeparate)
+#define glTexParameteri _SAPP_QT_PROC(glTexParameteri)
+#define glGetIntegerv _SAPP_QT_PROC(glGetIntegerv)
+#define glEnable _SAPP_QT_PROC(glEnable)
+#define glBlitFramebuffer _SAPP_QT_PROC(glBlitFramebuffer)
+#define glStencilMask _SAPP_QT_PROC(glStencilMask)
+#define glAttachShader _SAPP_QT_PROC(glAttachShader)
+#define glGetError _SAPP_QT_PROC(glGetError)
+#define glClearColor _SAPP_QT_PROC(glClearColor)
+#define glBlendColor _SAPP_QT_PROC(glBlendColor)
+#define glTexParameterf _SAPP_QT_PROC(glTexParameterf)
+#define glGetShaderInfoLog _SAPP_QT_PROC(glGetShaderInfoLog)
+#define glDepthFunc _SAPP_QT_PROC(glDepthFunc)
+#define glStencilOp _SAPP_QT_PROC(glStencilOp)
+#define glStencilFunc _SAPP_QT_PROC(glStencilFunc)
+#define glEnableVertexAttribArray _SAPP_QT_PROC(glEnableVertexAttribArray)
+#define glBlendFunc _SAPP_QT_PROC(glBlendFunc)
+#define glUniform1fv _SAPP_QT_PROC(glUniform1fv)
+#define glReadBuffer _SAPP_QT_PROC(glReadBuffer)
+#define glClear _SAPP_QT_PROC(glClear)
+#define glTexImage2D _SAPP_QT_PROC(glTexImage2D)
+#define glGenVertexArrays _SAPP_QT_PROC(glGenVertexArrays)
+#define glFrontFace _SAPP_QT_PROC(glFrontFace)
+#define glCullFace _SAPP_QT_PROC(glCullFace)
+
+
+class OpenGLError : public QEvent
+{
+public:
+
+  /*****************************************************************************
+   * Different Possible Error Types
+   ****************************************************************************/
+  enum FunctionType
+  {
+    bind,
+    read,
+    create,
+    unmap,
+    link,
+    addShader,
+    addShaderFromSourceCode,
+    addShaderFromSourceFile
+  };
+
+  enum ObjectType
+  {
+    QOpenGLBuffer,
+    QOpenGLShaderProgram,
+    QOpenGLVertexArrayObject
+  };
+
+  /*****************************************************************************
+   * Event Methods
+   ****************************************************************************/
+  // Constructors / Destructors
+  OpenGLError(char const *callerName, char const *fnName, ObjectType objType, FunctionType fnType);
+  virtual ~OpenGLError();
+
+  // Accessing Types
+  char const *functionName() const;
+  char const *callerName() const;
+  ObjectType objectType() const;
+  FunctionType functionType() const;
+
+  // Static Access
+  static QEvent::Type type();
+  static bool sendEvent(OpenGLError *event);
+  static void pushErrorHandler(QObject *obj);
+  static void popErrorHandler();
+
+private:
+  char const *m_functionName;
+  char const *m_callerName;
+  ObjectType m_objectType;
+  FunctionType m_functionType;
+  static QStack<QObject*> m_errorHandler;
+};
+
+
+// Inline Functions
+inline OpenGLError::OpenGLError(char const *callerName, char const *fnName, ObjectType objType, FunctionType fnType) : QEvent(type()), m_functionName(fnName), m_callerName(callerName), m_objectType(objType), m_functionType(fnType) {}
+inline OpenGLError::~OpenGLError() {}
+inline char const* OpenGLError::functionName() const { return m_functionName; }
+inline char const* OpenGLError::callerName() const { return m_callerName; }
+inline OpenGLError::ObjectType OpenGLError::objectType() const { return m_objectType; }
+inline OpenGLError::FunctionType OpenGLError::functionType() const { return m_functionType; }
+
+
+/*******************************************************************************
+ * OpenGLError static types
+ ******************************************************************************/
+QStack<QObject*> OpenGLError::m_errorHandler;
+
+/*******************************************************************************
+ * OpenGLError methods
+ ******************************************************************************/
+QEvent::Type OpenGLError::type()
+{
+  static QEvent::Type customEventType =
+    static_cast<QEvent::Type>(QEvent::registerEventType());
+  return customEventType;
+}
+
+bool OpenGLError::sendEvent(OpenGLError *event)
+{
+  if (m_errorHandler.empty())
+  {
+    qWarning("Set OpenGLError::setErrorHandler() before calling any GL_DEBUG OpenGL functions!");
+    return false;
+  }
+  return QCoreApplication::sendEvent(m_errorHandler.top(), event);
+}
+
+void OpenGLError::pushErrorHandler(QObject *obj)
+{
+#ifdef GL_DEBUG
+  qDebug() << "GL_DEBUG Error Handler (" << obj << ")";
+#endif // GL_DEBUG
+  m_errorHandler.push(obj);
+}
+void OpenGLError::popErrorHandler() { m_errorHandler.pop(); }
+
+
+// -----
+
+class Input
+{
+public:
+
+  // Possible key states
+  enum InputState
+  {
+    InputInvalid,
+    InputRegistered,
+    InputUnregistered,
+    InputTriggered,
+    InputPressed,
+    InputReleased
+  };
+
+  // State checking
+  static InputState keyState(Qt::Key key);
+  static bool keyTriggered(Qt::Key key);
+  static bool keyPressed(Qt::Key key);
+  static bool keyReleased(Qt::Key key);
+  static InputState buttonState(Qt::MouseButton button);
+  static bool buttonTriggered(Qt::MouseButton button);
+  static bool buttonPressed(Qt::MouseButton button);
+  static bool buttonReleased(Qt::MouseButton button);
+  static QPoint mousePosition();
+  static QPoint mouseDelta();
+
+private:
+
+  // State updating
+  static void update();
+  static void registerKeyPress(int key);
+  static void registerKeyRelease(int key);
+  static void registerMousePress(Qt::MouseButton button);
+  static void registerMouseRelease(Qt::MouseButton button);
+  static void reset();
+  friend class Window;
+};
+
+inline bool Input::keyTriggered(Qt::Key key) { return keyState(key) == InputTriggered; }
+inline bool Input::keyPressed(Qt::Key key) { return keyState(key) == InputPressed; }
+inline bool Input::keyReleased(Qt::Key key) { return keyState(key) == InputReleased; }
+inline bool Input::buttonTriggered(Qt::MouseButton button) { return buttonState(button) == InputTriggered; }
+inline bool Input::buttonPressed(Qt::MouseButton button) { return buttonState(button) == InputPressed; }
+inline bool Input::buttonReleased(Qt::MouseButton button) { return buttonState(button) == InputReleased; }
+
+
+/*******************************************************************************
+ * Static Helper Structs
+ ******************************************************************************/
+template <typename T>
+struct InputInstance : std::pair<T, Input::InputState>
+{
+  typedef std::pair<T, Input::InputState> base_class;
+  inline InputInstance(T value) : base_class(value, Input::InputInvalid) {}
+  inline InputInstance(T value, Input::InputState state) : base_class(value, state) {}
+  inline bool operator==(const InputInstance &rhs) const
+  {
+    return this->first == rhs.first;
+  }
+};
+
+// Instance types
+typedef InputInstance<Qt::Key> KeyInstance;
+typedef InputInstance<Qt::MouseButton> ButtonInstance;
+
+// Container types
+typedef std::vector<KeyInstance> KeyContainer;
+typedef std::vector<ButtonInstance> ButtonContainer;
+
+// Globals
+static KeyContainer sg_keyInstances;
+static ButtonContainer sg_buttonInstances;
+static QPoint sg_mouseCurrPosition;
+static QPoint sg_mousePrevPosition;
+static QPoint sg_mouseDelta;
+
+/*******************************************************************************
+ * Static Helper Fucntions
+ ******************************************************************************/
+static inline KeyContainer::iterator FindKey(Qt::Key value)
+{
+  return std::find(sg_keyInstances.begin(), sg_keyInstances.end(), value);
+}
+
+static inline ButtonContainer::iterator FindButton(Qt::MouseButton value)
+{
+  return std::find(sg_buttonInstances.begin(), sg_buttonInstances.end(), value);
+}
+
+template <typename TPair> static inline void UpdateStates(TPair &instance)
+{
+  switch (instance.second)
+  {
+  case Input::InputRegistered:
+    instance.second = Input::InputTriggered;
+    break;
+  case Input::InputTriggered:
+    instance.second = Input::InputPressed;
+    break;
+  case Input::InputUnregistered:
+    instance.second = Input::InputReleased;
+    break;
+  default:
+    break;
+  }
+}
+
+template <typename TPair> static inline bool CheckReleased(const TPair &instance)
+{
+  return instance.second == Input::InputReleased;
+}
+
+template <typename Container> static inline void Update(Container &container)
+{
+  typedef typename Container::iterator Iter;
+  typedef typename Container::value_type TPair;
+
+  // Remove old data
+  Iter remove = std::remove_if(container.begin(), container.end(), &CheckReleased<TPair>);
+  container.erase(remove, container.end());
+
+  // Update existing data
+  std::for_each(container.begin(), container.end(), &UpdateStates<TPair>);
+}
+
+/*******************************************************************************
+ * QInput Implementation
+ ******************************************************************************/
+Input::InputState Input::keyState(Qt::Key key)
+{
+  KeyContainer::iterator it = FindKey(key);
+  return (it != sg_keyInstances.end()) ? it->second : InputInvalid;
+}
+
+Input::InputState Input::buttonState(Qt::MouseButton button)
+{
+  ButtonContainer::iterator it = FindButton(button);
+  return (it != sg_buttonInstances.end()) ? it->second : InputInvalid;
+}
+
+QPoint Input::mousePosition() { return QCursor::pos(); }
+QPoint Input::mouseDelta() { return sg_mouseDelta; }
+
+void Input::update()
+{
+  // Update Mouse Delta
+  sg_mousePrevPosition = sg_mouseCurrPosition;
+  sg_mouseCurrPosition = QCursor::pos();
+  sg_mouseDelta = sg_mouseCurrPosition - sg_mousePrevPosition;
+
+  // Update KeyState values
+  Update(sg_buttonInstances);
+  Update(sg_keyInstances);
+}
+
+void Input::registerKeyPress(int key)
+{
+  KeyContainer::iterator it = FindKey((Qt::Key)key);
+  if (it == sg_keyInstances.end())
+  {
+    sg_keyInstances.push_back(KeyInstance((Qt::Key)key, InputRegistered));
+  }
+}
+
+void Input::registerKeyRelease(int key)
+{
+  KeyContainer::iterator it = FindKey((Qt::Key)key);
+  if (it != sg_keyInstances.end())
+  {
+    it->second = InputUnregistered;
+  }
+}
+
+void Input::registerMousePress(Qt::MouseButton button)
+{
+  ButtonContainer::iterator it = FindButton(button);
+  if (it == sg_buttonInstances.end())
+  {
+    sg_buttonInstances.push_back(ButtonInstance(button, InputRegistered));
+  }
+}
+
+void Input::registerMouseRelease(Qt::MouseButton button)
+{
+  ButtonContainer::iterator it = FindButton(button);
+  if (it != sg_buttonInstances.end())
+  {
+    it->second = InputUnregistered;
+  }
+}
+
+void Input::reset()
+{
+  sg_keyInstances.clear();
+  sg_buttonInstances.clear();
+}
+
+
+// -----
+
+class SokolApplicationFilter : public QObject
+{
+  Q_OBJECT
+public:
+  virtual bool eventFilter(QObject *object, QEvent *event) Q_OVERRIDE;
+  {
+    if (event->type() == QEvent::KeyPress) {
+        QKeyEvent *keyEvent = static_cast<QKeyEvent *>(event);
+        if (event->isAutoRepeat())
+            event->ignore();
+        else
+            Input::registerKeyPress(event->key());
+        return true;
+    }
+    if (event->type() == QEvent::KeyRelease) {
+        QKeyEvent *keyEvent = static_cast<QKeyEvent *>(event);
+        if (event->isAutoRepeat())
+            event->ignore();
+        else
+            Input::registerKeyRelease(keyEvent->key());
+        return true;
+    }
+    if (event->type() == QEvent::mousePressEvent) {
+        QMouseEvent *mouseEvent = static_cast<QMouseEvent *>(event);
+        Input::registerMousePress(mouseEvent->button());
+        return true;
+    }
+    if (event->type() == QEvent::mouseReleaseEvent) {
+        QMouseEvent *mouseEvent = static_cast<QMouseEvent *>(event);
+        Input::registerMouseRelease(mouseEvent->button());
+        return true;
+    }
+    if(event->type() == QEvent::Shortcut){
+        QShortcutEvent *sc = static_cast<QShortcutEvent *>(event);
+        const QKeySequence &ks = sc->key();
+        return true;
+    }
+    return false;
+  }
+};
+
+class SokolQtApplication : public
+#ifdef QT_WIDGETS_LIB
+  QApplication
+#else
+  QGuiApplication
+#endif
+{
+  Q_OBJECT
+public:
+    SokolQtApplication()
+    {
+    }
+};
+
+_SOKOL_PRIVATE void _sapp_run(const sapp_desc* desc) {
+    _SOKOL_UNUSED(desc);
+}
+
+#else /* QT_GUI_LIB */
 
 /*== MacOS/iOS ===============================================================*/
 
@@ -1839,7 +2476,7 @@ _SOKOL_PRIVATE void _sapp_ios_touch_event(sapp_event_type type, NSSet<UITouch *>
 #endif /* __APPLE__ */
 
 /*== EMSCRIPTEN ==============================================================*/
-#if defined(__EMSCRIPTEN__)
+#if defined(__EMSCRIPTEN__) && !defined(QT_GUI_LIB)
 #if defined(SOKOL_GLES3)
 #include <GLES3/gl3.h>
 #else
@@ -2538,7 +3175,7 @@ _SOKOL_PRIVATE const _sapp_gl_fbconfig* _sapp_gl_choose_fbconfig(const _sapp_gl_
 #endif
 
 /*== WINDOWS ==================================================================*/
-#if defined(_WIN32)
+#if defined(_WIN32) && !defined(QT_GUI_LIB)
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
@@ -4130,7 +4767,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
 #endif /* WINDOWS */
 
 /*== Android ================================================================*/
-#if defined(__ANDROID__)
+#if defined(__ANDROID__) && !defined(QT_GUI_LIB)
 #include <pthread.h>
 #include <unistd.h>
 #include <android/native_activity.h>
@@ -4853,7 +5490,7 @@ void ANativeActivity_onCreate(ANativeActivity* activity, void* saved_state, size
 #endif /* Android */
 
 /*== LINUX ==================================================================*/
-#if (defined(__linux__) || defined(__unix__)) && !defined(__EMSCRIPTEN__) && !defined(__ANDROID__)
+#if (defined(__linux__) || defined(__unix__)) && !defined(__EMSCRIPTEN__) && !defined(__ANDROID__) && !defined(QT_GUI_LIB)
 #define GL_GLEXT_PROTOTYPES
 #include <X11/X.h>
 #include <X11/Xlib.h>
@@ -6666,6 +7303,8 @@ int main(int argc, char* argv[]) {
 #endif /* SOKOL_NO_ENTRY */
 #endif /* LINUX */
 
+#endif /* QT_GUI_LIB */
+
 /*== PUBLIC API FUNCTIONS ====================================================*/
 #if defined(SOKOL_NO_ENTRY)
 SOKOL_API_IMPL int sapp_run(const sapp_desc* desc) {
@@ -6732,7 +7371,7 @@ SOKOL_API_IMPL bool sapp_keyboard_shown(void) {
 
 SOKOL_API_IMPL const void* sapp_metal_get_device(void) {
     SOKOL_ASSERT(_sapp.valid);
-    #if defined(SOKOL_METAL)
+    #if defined(SOKOL_METAL) && defined(__OBJC__)
         const void* obj = (__bridge const void*) _sapp_mtl_device_obj;
         SOKOL_ASSERT(obj);
         return obj;
@@ -6743,7 +7382,7 @@ SOKOL_API_IMPL const void* sapp_metal_get_device(void) {
 
 SOKOL_API_IMPL const void* sapp_metal_get_renderpass_descriptor(void) {
     SOKOL_ASSERT(_sapp.valid);
-    #if defined(SOKOL_METAL)
+    #if defined(SOKOL_METAL) && defined(__OBJC__)
         const void* obj =  (__bridge const void*) [_sapp_view_obj currentRenderPassDescriptor];
         SOKOL_ASSERT(obj);
         return obj;
@@ -6754,7 +7393,7 @@ SOKOL_API_IMPL const void* sapp_metal_get_renderpass_descriptor(void) {
 
 SOKOL_API_IMPL const void* sapp_metal_get_drawable(void) {
     SOKOL_ASSERT(_sapp.valid);
-    #if defined(SOKOL_METAL)
+    #if defined(SOKOL_METAL) && defined(__OBJC__)
         const void* obj = (__bridge const void*) [_sapp_view_obj currentDrawable];
         SOKOL_ASSERT(obj);
         return obj;
@@ -6764,7 +7403,7 @@ SOKOL_API_IMPL const void* sapp_metal_get_drawable(void) {
 }
 
 SOKOL_API_IMPL const void* sapp_macos_get_window(void) {
-    #if defined(__APPLE__) && !TARGET_OS_IPHONE
+    #if defined(__APPLE__) && defined(__OBJC__) && !TARGET_OS_IPHONE
         const void* obj = (__bridge const void*) _sapp_macos_window_obj;
         SOKOL_ASSERT(obj);
         return obj;
@@ -6774,7 +7413,7 @@ SOKOL_API_IMPL const void* sapp_macos_get_window(void) {
 }
 
 SOKOL_API_IMPL const void* sapp_ios_get_window(void) {
-    #if defined(__APPLE__) && TARGET_OS_IPHONE
+    #if defined(__APPLE__) && defined(__OBJC__) && TARGET_OS_IPHONE
         const void* obj = (__bridge const void*) _sapp_ios_window_obj;
         SOKOL_ASSERT(obj);
         return obj;

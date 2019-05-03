@@ -169,21 +169,20 @@
 #define SOKOL_IMGUI_INCLUDED (1)
 #include <stdint.h>
 #include <stdbool.h>
+#include <stdio.h>
 
 #if !defined(SOKOL_GFX_INCLUDED)
-#error "Please include sokol_gfx.h before sokol_imgui.h"
+# error "Please include sokol_gfx.h before sokol_imgui.h"
 #endif
 #if !defined(SOKOL_IMGUI_NO_SOKOL_APP) && !defined(SOKOL_APP_INCLUDED)
-#error "Please include sokol_app.h before sokol_imgui.h"
+# error "Please include sokol_app.h before sokol_imgui.h"
 #endif
 
 #ifndef SOKOL_API_DECL
-#define SOKOL_API_DECL extern
+# define SOKOL_API_DECL extern
 #endif
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+BEGIN_EXTERN_C
 
 typedef struct simgui_desc_t {
     int max_vertices;
@@ -195,6 +194,7 @@ typedef struct simgui_desc_t {
     bool no_default_font;
 } simgui_desc_t;
 
+#ifndef SOKOL_CLASS_IMPL
 SOKOL_API_DECL void simgui_setup(const simgui_desc_t* desc);
 SOKOL_API_DECL void simgui_new_frame(int width, int height, double delta_time);
 SOKOL_API_DECL void simgui_render(void);
@@ -202,10 +202,9 @@ SOKOL_API_DECL void simgui_render(void);
 SOKOL_API_DECL bool simgui_handle_event(const sapp_event* ev);
 #endif
 SOKOL_API_DECL void simgui_shutdown(void);
+#endif // SOKOL_CLASS_IMPL
 
-#ifdef __cplusplus
-} /* extern "C" */
-#endif
+END_EXTERN_C
 
 /*-- IMPLEMENTATION ----------------------------------------------------------*/
 #ifdef SOKOL_IMGUI_IMPL
@@ -264,7 +263,7 @@ static _simgui_state_t _simgui;
 
 /* embedded shader sources */
 #if defined(SOKOL_GLCORE33)
-static const char* _simgui_vs_src =
+static constexpr char* _simgui_vs_src =
     "#version 330\n"
     "uniform vec2 disp_size;\n"
     "in vec2 position;\n"
@@ -277,7 +276,7 @@ static const char* _simgui_vs_src =
     "    uv = texcoord0;\n"
     "    color = color0;\n"
     "}\n";
-static const char* _simgui_fs_src =
+static constexpr char* _simgui_fs_src =
     "#version 330\n"
     "uniform sampler2D tex;\n"
     "in vec2 uv;\n"
@@ -287,7 +286,7 @@ static const char* _simgui_fs_src =
     "    frag_color = texture(tex, uv) * color;\n"
     "}\n";
 #elif defined(SOKOL_GLES2) || defined(SOKOL_GLES3)
-static const char* _simgui_vs_src =
+static constexpr char* _simgui_vs_src =
     "uniform vec2 disp_size;\n"
     "attribute vec2 position;\n"
     "attribute vec2 texcoord0;\n"
@@ -299,7 +298,7 @@ static const char* _simgui_vs_src =
     "    uv = texcoord0;\n"
     "    color = color0;\n"
     "}\n";
-static const char* _simgui_fs_src =
+static constexpr char* _simgui_fs_src =
     "precision mediump float;\n"
     "uniform sampler2D tex;\n"
     "varying vec2 uv;\n"
@@ -308,7 +307,7 @@ static const char* _simgui_fs_src =
     "    gl_FragColor = texture2D(tex, uv) * color;\n"
     "}\n";
 #elif defined(SOKOL_METAL)
-static const char* _simgui_vs_src =
+static constexpr char* _simgui_vs_src =
     "#include <metal_stdlib>\n"
     "using namespace metal;\n"
     "struct params_t {\n"
@@ -331,7 +330,7 @@ static const char* _simgui_vs_src =
     "  out.color = in.color;\n"
     "  return out;\n"
     "}\n";
-static const char* _simgui_fs_src =
+static constexpr char* _simgui_fs_src =
     "#include <metal_stdlib>\n"
     "using namespace metal;\n"
     "struct fs_in {\n"
@@ -379,7 +378,7 @@ static const char* _simgui_fs_src =
             return tex.Sample(smp, uv) * color;
         }
 */
-static const uint8_t _simgui_vs_bin[] = {
+static constexpr uint8_t _simgui_vs_bin[] = {
      68,  88,  66,  67, 204, 137, 
     115, 177, 245,  67, 161, 195, 
      58, 224,  90,  35,  76, 123, 
@@ -550,7 +549,7 @@ static const uint8_t _simgui_vs_bin[] = {
       0,   0,   0,   0,   0,   0, 
       0,   0,   0,   0
 };
-static const uint8_t _simgui_fs_bin[] = {
+static constexpr uint8_t _simgui_fs_bin[] = {
      68,  88,  66,  67, 116,  27, 
     191,   2, 170,  79,  42, 154, 
      39,  13,  69, 105, 240,  12, 
@@ -852,7 +851,10 @@ SOKOL_API_IMPL void simgui_render(void) {
     if (draw_data->CmdListsCount == 0) {
         return;
     }
+
     const float dpi_scale = _simgui.desc.dpi_scale;
+
+    draw_data->ScaleClipRects(ImVec2(dpi_scale, dpi_scale));
 
     /* render the ImGui command list */
     sg_push_debug_group("sokol-imgui");
@@ -898,10 +900,10 @@ SOKOL_API_IMPL void simgui_render(void) {
                     bind.fs_images[0].id = (uint32_t)(uintptr_t)tex_id;
                     sg_apply_bindings(&bind);
                 }
-                const int scissor_x = (int) (pcmd.ClipRect.x * dpi_scale);
-                const int scissor_y = (int) (pcmd.ClipRect.y * dpi_scale);
-                const int scissor_w = (int) ((pcmd.ClipRect.z - pcmd.ClipRect.x) * dpi_scale);
-                const int scissor_h = (int) ((pcmd.ClipRect.w - pcmd.ClipRect.y) * dpi_scale);
+                const int scissor_x = (int) (pcmd.ClipRect.x);
+                const int scissor_y = (int) (pcmd.ClipRect.y);
+                const int scissor_w = (int) (pcmd.ClipRect.z - pcmd.ClipRect.x);
+                const int scissor_h = (int) (pcmd.ClipRect.w - pcmd.ClipRect.y);
                 sg_apply_scissor_rect(scissor_x, scissor_y, scissor_w, scissor_h, true);
                 sg_draw(base_element, pcmd.ElemCount, 1);
             }

@@ -8,7 +8,6 @@
 #include <QWaitCondition>
 #include <QPainter>
 #include <QWindow>
-#include <QOpenGLFunctions>
 #include <QOpenGLContext>
 #include <QApplication>
 
@@ -20,7 +19,13 @@
 #include <alloca.h>
 #include <math.h>
 
-#include <qopengl.h>
+#define HANDMADE_MATH_IMPLEMENTATION
+#define HANDMADE_MATH_NO_SSE
+#include "HandmadeMath.h"
+#define SOKOL_IMPL
+#include <sokol_app.h>
+#include <sokol_gfx.h>
+#include <ui/dbgui.h>
 
 class SleepSimulator {
     QMutex localMutex;
@@ -43,25 +48,99 @@ void qtDelay(long ms) {
     s.sleep(ms);
 }
 
+// ----- Basic shaders -----
 
-// == Qt Window ==
+#if defined(SOKOL_GLCORE33)
+static constexpr const char* vs_src =
+    "#version 330\n"
+    "in vec4 position;\n"
+    "in vec4 color0;\n"
+    "out vec4 color;\n"
+    "void main() {\n"
+    "  gl_Position = position;\n"
+    "  color = color0;\n"
+    "}\n";
+static constexpr const char* fs_src =
+    "#version 330\n"
+    "in vec4 color;\n"
+    "out vec4 frag_color;\n"
+    "void main() {\n"
+    "  frag_color = color;\n"
+    "}\n";
+#elif defined(SOKOL_GLES3) || defined(SOKOL_GLES2)
+static constexpr const char* vs_src =
+    "attribute vec4 position;\n"
+    "attribute vec4 color0;\n"
+    "varying vec4 color;\n"
+    "void main() {\n"
+    "  gl_Position = position;\n"
+    "  color = color0;\n"
+    "}\n";
+static constexpr const char* fs_src =
+    "precision mediump float;\n"
+    "varying vec4 color;\n"
+    "void main() {\n"
+    "  gl_FragColor = color;\n"
+    "}\n";
+#elif defined(SOKOL_METAL)
+static constexpr const char* vs_src =
+    "#include <metal_stdlib>\n"
+    "using namespace metal;\n"
+    "struct vs_in {\n"
+    "  float4 position [[attribute(0)]];\n"
+    "  float4 color [[attribute(1)]];\n"
+    "};\n"
+    "struct vs_out {\n"
+    "  float4 position [[position]];\n"
+    "  float4 color;\n"
+    "};\n"
+    "vertex vs_out _main(vs_in inp [[stage_in]]) {\n"
+    "  vs_out outp;\n"
+    "  outp.position = inp.position;\n"
+    "  outp.color = inp.color;\n"
+    "  return outp;\n"
+    "}\n";
+static constexpr const char* fs_src =
+    "#include <metal_stdlib>\n"
+    "using namespace metal;\n"
+    "fragment float4 _main(float4 color [[stage_in]]) {\n"
+    "  return color;\n"
+    "};\n";
+#elif defined(SOKOL_D3D11)
+static constexpr const char* vs_src =
+    "struct vs_in {\n"
+    "  float4 pos: POS;\n"
+    "  float4 color: COLOR;\n"
+    "};\n"
+    "struct vs_out {\n"
+    "  float4 color: COLOR0;\n"
+    "  float4 pos: SV_Position;\n"
+    "};\n"
+    "vs_out main(vs_in inp) {\n"
+    "  vs_out outp;\n"
+    "  outp.pos = inp.pos;\n"
+    "  outp.color = inp.color;\n"
+    "  return outp;\n"
+    "}\n";
+static constexpr const char* fs_src =
+    "float4 main(float4 color: COLOR0): SV_Target0 {\n"
+    "  return color;\n"
+    "}\n";
+#endif
 
-class Window : public QWindow, protected QOpenGLFunctions
+
+// ----- Qt render window -----
+
+class Window : public QWindow
 {
     Q_OBJECT
-
-# define SOKOL_CLASS_IMPL
-# define SOKOL_GLCORE33
-# include <sokol_gfx.h>
 
 private:
     bool m_done, m_update_pending, m_resize_pending, m_auto_refresh;
     QOpenGLContext *m_context;
 
     sg_pipeline pip;
-    /* resource bindings */
-    sg_bindings binds;
-    /* default pass action (clear to grey) */
+    sg_bindings bind;
     sg_pass_action pass_action;
 
 public:
@@ -78,6 +157,7 @@ public:
     ~Window() {
         /* cleanup */
         sg_shutdown();
+        m_context->deleteLater();
     }
     void setAutoRefresh(bool a) { m_auto_refresh = a; }
 
@@ -91,7 +171,8 @@ public:
         setTitle(QString("Qt %1 - %2 (%3)").arg(QT_VERSION_STR).arg((const char*)glGetString(GL_VERSION)).arg((const char*)glGetString(GL_RENDERER)));
 
         /* setup sokol_gfx */
-        sg_desc desc = {0}; sg_setup(&desc);
+        sg_desc desc{0}; sg_setup(&desc);
+        __dbgui_setup(1);
 
         /* a vertex buffer */
         const float vertices[] = {
@@ -103,57 +184,53 @@ public:
         sg_buffer_desc buffer_desc = {
             .size = sizeof(vertices),
             .content = vertices,
+            .label = "triangle-vertices"
         };
-        sg_buffer vbuf = sg_make_buffer(&buffer_desc);
+
+        bind = (sg_bindings){
+            .vertex_buffers[0] = sg_make_buffer(&buffer_desc)
+        };
 
         /* a shader */
         sg_shader_desc shader_desc = {
-            .vs.source =
-                "#version 330\n"
-                "in vec4 position;\n"
-                "in vec4 color0;\n"
-                "out vec4 color;\n"
-                "void main() {\n"
-                "  gl_Position = position;\n"
-                "  color = color0;\n"
-                "}\n",
-            .fs.source =
-                "#version 330\n"
-                "in vec4 color;\n"
-                "out vec4 frag_color;\n"
-                "void main() {\n"
-                "  frag_color = color;\n"
-                "}\n"
+            .attrs = {
+                [0] = { .name="position", .sem_name="POS" },
+                [1] = { .name="color0", .sem_name="COLOR" }
+            },
+            .vs.source = vs_src,
+            .fs.source = fs_src,
+            .label = "triangle-shader"
         };
         sg_shader shd = sg_make_shader(&shader_desc);
 
         /* a pipeline state object (default render states are fine for triangle) */
         sg_pipeline_desc pipeline_desc = {
+            /* if the vertex layout doesn't have gaps, don't need to provide strides and offsets */
             .shader = shd,
             .layout = {
                 .attrs = {
-                    [0] = { .name="position", .format=SG_VERTEXFORMAT_FLOAT3 },
-                    [1] = { .name="color0", .format=SG_VERTEXFORMAT_FLOAT4 }
+                    [0].format=SG_VERTEXFORMAT_FLOAT3,
+                    [1].format=SG_VERTEXFORMAT_FLOAT4
                 }
-            }
+            },
+            .label = "triangle-pipeline"
         };
         pip = sg_make_pipeline(&pipeline_desc);
 
-        /* resource bindings */
-        binds = (sg_bindings){
-            .vertex_buffers[0] = vbuf
-        };
-
         /* default pass action (clear to grey) */
-        pass_action = {0};
+        pass_action = { 0 };
+
+        /* validate sapp state */
+        _sapp.valid = true;
     }
     void update() { renderLater(); }
     void render() {
         /* draw loop */
-        sg_begin_default_pass(&pass_action, width(), height(), devicePixelRatio());
+        sg_begin_default_pass(&pass_action, sapp_width(), sapp_height());
         sg_apply_pipeline(pip);
-        sg_apply_bindings(&binds);
+        sg_apply_bindings(&bind);
         sg_draw(0, 3, 1);
+        __dbgui_draw();
         sg_end_pass();
         sg_commit();
     }
@@ -169,6 +246,7 @@ public:
     }
     void mouseMoveEvent(QMouseEvent *event) {
         cursorPos = QPoint(event->x(), event->y());
+        // __dbgui_event()
     }
     void keyPressEvent(QKeyEvent* event) {
         switch(event->key()) {
@@ -179,7 +257,8 @@ public:
     }
     void quit() { m_done = true; }
     bool done() const { return m_done; }
-    protected:
+
+protected:
     void closeEvent(QCloseEvent *event) { quit(); }
     bool event(QEvent *event) {
         switch (event->type()) {
@@ -197,6 +276,12 @@ public:
     }
     void resizeEvent(QResizeEvent *event)
     {
+        _sapp.window_width = event->size().width();
+        _sapp.window_height = event->size().height();
+        _sapp.dpi_scale = devicePixelRatio();
+        _sapp.framebuffer_width = _sapp.window_width * _sapp.dpi_scale;
+        _sapp.framebuffer_height = _sapp.window_height * _sapp.dpi_scale;
+
         renderLater();
     }
     public slots:
@@ -217,7 +302,6 @@ public:
         }
         m_context->makeCurrent(this);
         if (needsInitialize) {
-            initializeOpenGLFunctions();
             initialize();
         }
         render();
