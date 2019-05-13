@@ -658,8 +658,90 @@ SOKOL_API_DECL int sapp_run(const sapp_desc* desc);
 } /* extern "C" */
 #endif
 
+#if defined(QT_GUI_LIB)
+    #include <qobject.h>
+    #include <qsharedpointer.h>
+    class EventDelivery
+    {
+    public:
+        EventDelivery(): m_Ev(0) {}
+        EventDelivery(int timeOffset, QEvent *ev):
+            m_TimeOffset(timeOffset),
+            m_Ev(ev)
+        {}
+        int timeOffset() const { return m_TimeOffset; }
+        QEvent* event() const { return m_Ev.data(); }
+
+    private:
+        int m_TimeOffset;
+        QSharedPointer<QEvent> m_Ev;
+    };
+
+    class Input
+    {
+    public:
+        // Possible key states
+        enum InputState
+        {
+            InputInvalid,
+            InputRegistered,
+            InputUnregistered,
+            InputTriggered,
+            InputPressed,
+            InputReleased
+        };
+
+        // State checking
+        static InputState keyState(Qt::Key key);
+        static bool keyTriggered(Qt::Key key) { return keyState(key) == InputTriggered; }
+        static bool keyPressed(Qt::Key key) { return keyState(key) == InputPressed; }
+        static bool keyReleased(Qt::Key key) { return keyState(key) == InputReleased; }
+        static InputState buttonState(Qt::MouseButton button);
+        static bool buttonTriggered(Qt::MouseButton button) { return buttonState(button) == InputTriggered; }
+        static bool buttonPressed(Qt::MouseButton button) { return buttonState(button) == InputPressed; }
+        static bool buttonReleased(Qt::MouseButton button) { return buttonState(button) == InputReleased; }
+        static QPoint mousePosition();
+        static QPoint mouseDelta();
+
+    private:
+        // State updating
+        static void update();
+        static void registerKeyPress(int key);
+        static void registerKeyRelease(int key);
+        static void registerMousePress(Qt::MouseButton button);
+        static void registerMouseRelease(Qt::MouseButton button);
+        static void reset();
+
+        friend class SokolApplicationFilter;
+    };
+
+    class SokolApplicationFilter : public QObject
+    {
+        Q_OBJECT
+    public:
+        virtual bool eventFilter(QObject *object, QEvent *event) Q_DECL_OVERRIDE;
+    };
+
+    #ifdef QT_WIDGETS_LIB
+    # include <qapplication.h>
+    # define __SOKOL_QT_BASE_APPLICATION QApplication
+    #else
+    # include <qguiapplication.h>
+    # define __SOKOL_QT_BASE_APPLICATION QGuiApplication
+    #endif
+    class SokolQtApplication : public __SOKOL_QT_BASE_APPLICATION
+    {
+        Q_OBJECT
+    public:
+        SokolQtApplication(int &argc, char **argv) : __SOKOL_QT_BASE_APPLICATION(argc, argv)
+        {
+            installEventFilter(new SokolApplicationFilter);
+        }
+    };
+#endif // QT_GUI_LIB
+
 /*-- IMPLEMENTATION ----------------------------------------------------------*/
-#ifdef SOKOL_IMPL
+#if defined(SOKOL_IMPL)
 #define SOKOL_APP_IMPL_INCLUDED (1)
 
 #ifdef _MSC_VER
@@ -931,12 +1013,13 @@ _SOKOL_PRIVATE void _sapp_frame(void) {
 
 /*== Qt Gui ==================================================================*/
 
-#if defined(QT_GUI_LIB) || defined(QT_WIDGETS_LIB)
+#if defined(QT_GUI_LIB)
 
 #include <qdebug.h>
 #include <qstack.h>
+#include <qqueue.h>
 #include <qevent.h>
-#include <qkeyevent.h>
+#include <qgesture.h>
 #include <qopenglcontext.h>
 #include <qopenglfunctions.h>
 #include <qopenglextrafunctions.h>
@@ -1201,14 +1284,11 @@ typedef int  GLint;
 #define glFrontFace _SAPP_QT_PROC(glFrontFace)
 #define glCullFace _SAPP_QT_PROC(glCullFace)
 
-
 class OpenGLError : public QEvent
 {
 public:
 
-  /*****************************************************************************
-   * Different Possible Error Types
-   ****************************************************************************/
+  // Different possible error types
   enum FunctionType
   {
     bind,
@@ -1228,18 +1308,16 @@ public:
     QOpenGLVertexArrayObject
   };
 
-  /*****************************************************************************
-   * Event Methods
-   ****************************************************************************/
-  // Constructors / Destructors
-  OpenGLError(char const *callerName, char const *fnName, ObjectType objType, FunctionType fnType);
-  virtual ~OpenGLError();
+  // Event methods
+
+  OpenGLError(char const *callerName, char const *fnName, ObjectType objType, FunctionType fnType) : QEvent(type()), m_functionName(fnName), m_callerName(callerName), m_objectType(objType), m_functionType(fnType) { }
+  virtual ~OpenGLError() { }
 
   // Accessing Types
-  char const *functionName() const;
-  char const *callerName() const;
-  ObjectType objectType() const;
-  FunctionType functionType() const;
+  char const *functionName() const { return m_functionName; }
+  char const *callerName() const { return m_callerName; }
+  ObjectType objectType() const { return m_objectType; }
+  FunctionType functionType() const { return m_functionType; }
 
   // Static Access
   static QEvent::Type type();
@@ -1255,24 +1333,10 @@ private:
   static QStack<QObject*> m_errorHandler;
 };
 
-
-// Inline Functions
-inline OpenGLError::OpenGLError(char const *callerName, char const *fnName, ObjectType objType, FunctionType fnType) : QEvent(type()), m_functionName(fnName), m_callerName(callerName), m_objectType(objType), m_functionType(fnType) {}
-inline OpenGLError::~OpenGLError() {}
-inline char const* OpenGLError::functionName() const { return m_functionName; }
-inline char const* OpenGLError::callerName() const { return m_callerName; }
-inline OpenGLError::ObjectType OpenGLError::objectType() const { return m_objectType; }
-inline OpenGLError::FunctionType OpenGLError::functionType() const { return m_functionType; }
-
-
-/*******************************************************************************
- * OpenGLError static types
- ******************************************************************************/
+// OpenGLError static types
 QStack<QObject*> OpenGLError::m_errorHandler;
 
-/*******************************************************************************
- * OpenGLError methods
- ******************************************************************************/
+// OpenGLError methods
 QEvent::Type OpenGLError::type()
 {
   static QEvent::Type customEventType =
@@ -1292,66 +1356,17 @@ bool OpenGLError::sendEvent(OpenGLError *event)
 
 void OpenGLError::pushErrorHandler(QObject *obj)
 {
-#ifdef GL_DEBUG
-  qDebug() << "GL_DEBUG Error Handler (" << obj << ")";
+#ifdef OPENGL_DEBUG
+  qDebug() << "OPENGL_DEBUG Error Handler (" << obj << ")";
 #endif // GL_DEBUG
   m_errorHandler.push(obj);
 }
 void OpenGLError::popErrorHandler() { m_errorHandler.pop(); }
 
 
-// -----
+// ----- Input class
 
-class Input
-{
-public:
-
-  // Possible key states
-  enum InputState
-  {
-    InputInvalid,
-    InputRegistered,
-    InputUnregistered,
-    InputTriggered,
-    InputPressed,
-    InputReleased
-  };
-
-  // State checking
-  static InputState keyState(Qt::Key key);
-  static bool keyTriggered(Qt::Key key);
-  static bool keyPressed(Qt::Key key);
-  static bool keyReleased(Qt::Key key);
-  static InputState buttonState(Qt::MouseButton button);
-  static bool buttonTriggered(Qt::MouseButton button);
-  static bool buttonPressed(Qt::MouseButton button);
-  static bool buttonReleased(Qt::MouseButton button);
-  static QPoint mousePosition();
-  static QPoint mouseDelta();
-
-private:
-
-  // State updating
-  static void update();
-  static void registerKeyPress(int key);
-  static void registerKeyRelease(int key);
-  static void registerMousePress(Qt::MouseButton button);
-  static void registerMouseRelease(Qt::MouseButton button);
-  static void reset();
-  friend class Window;
-};
-
-inline bool Input::keyTriggered(Qt::Key key) { return keyState(key) == InputTriggered; }
-inline bool Input::keyPressed(Qt::Key key) { return keyState(key) == InputPressed; }
-inline bool Input::keyReleased(Qt::Key key) { return keyState(key) == InputReleased; }
-inline bool Input::buttonTriggered(Qt::MouseButton button) { return buttonState(button) == InputTriggered; }
-inline bool Input::buttonPressed(Qt::MouseButton button) { return buttonState(button) == InputPressed; }
-inline bool Input::buttonReleased(Qt::MouseButton button) { return buttonState(button) == InputReleased; }
-
-
-/*******************************************************************************
- * Static Helper Structs
- ******************************************************************************/
+// Static helper structs
 template <typename T>
 struct InputInstance : std::pair<T, Input::InputState>
 {
@@ -1375,13 +1390,18 @@ typedef std::vector<ButtonInstance> ButtonContainer;
 // Globals
 static KeyContainer sg_keyInstances;
 static ButtonContainer sg_buttonInstances;
+static QList<QTouchEvent::TouchPoint> sg_currTouchPoints;
+static QList<QTouchEvent::TouchPoint> sg_prevTouchPoints;
 static QPoint sg_mouseCurrPosition;
 static QPoint sg_mousePrevPosition;
 static QPoint sg_mouseDelta;
+static QGesture sg_pinchGesture;
+static QGesture sg_panGesture;
 
-/*******************************************************************************
- * Static Helper Fucntions
- ******************************************************************************/
+QDateTime sg_recordingStartTime;
+QQueue<EventDelivery> sg_recording;
+
+// Static helper functions
 static inline KeyContainer::iterator FindKey(Qt::Key value)
 {
   return std::find(sg_keyInstances.begin(), sg_keyInstances.end(), value);
@@ -1428,9 +1448,7 @@ template <typename Container> static inline void Update(Container &container)
   std::for_each(container.begin(), container.end(), &UpdateStates<TPair>);
 }
 
-/*******************************************************************************
- * QInput Implementation
- ******************************************************************************/
+// QInput Implementation
 Input::InputState Input::keyState(Qt::Key key)
 {
   KeyContainer::iterator it = FindKey(key);
@@ -1503,60 +1521,104 @@ void Input::reset()
 
 // -----
 
-class SokolApplicationFilter : public QObject
-{
-  Q_OBJECT
-public:
-  virtual bool eventFilter(QObject *object, QEvent *event) Q_OVERRIDE;
-  {
-    if (event->type() == QEvent::KeyPress) {
-        QKeyEvent *keyEvent = static_cast<QKeyEvent *>(event);
-        if (event->isAutoRepeat())
-            event->ignore();
-        else
-            Input::registerKeyPress(event->key());
-        return true;
-    }
-    if (event->type() == QEvent::KeyRelease) {
-        QKeyEvent *keyEvent = static_cast<QKeyEvent *>(event);
-        if (event->isAutoRepeat())
-            event->ignore();
-        else
-            Input::registerKeyRelease(keyEvent->key());
-        return true;
-    }
-    if (event->type() == QEvent::mousePressEvent) {
-        QMouseEvent *mouseEvent = static_cast<QMouseEvent *>(event);
-        Input::registerMousePress(mouseEvent->button());
-        return true;
-    }
-    if (event->type() == QEvent::mouseReleaseEvent) {
-        QMouseEvent *mouseEvent = static_cast<QMouseEvent *>(event);
-        Input::registerMouseRelease(mouseEvent->button());
-        return true;
-    }
-    if(event->type() == QEvent::Shortcut){
-        QShortcutEvent *sc = static_cast<QShortcutEvent *>(event);
-        const QKeySequence &ks = sc->key();
-        return true;
-    }
-    return false;
-  }
-};
+_SOKOL_PRIVATE uint32_t _sapp_qt_mods(void) {
+	Qt::KeyboardModifiers modifiers = QApplication::keyboardModifiers();
+    uint32_t mods = 0;
+    if (modifiers & Qt::ShiftModifier) mods |= SAPP_MODIFIER_SHIFT;
+    if (modifiers & Qt::ControlModifier) mods |= SAPP_MODIFIER_CTRL;
+    if (modifiers & Qt::AltModifier) mods |= SAPP_MODIFIER_ALT;
+    if (modifiers & Qt::MetaModifier) mods |= SAPP_MODIFIER_SUPER;
+    return mods;
+}
 
-class SokolQtApplication : public
-#ifdef QT_WIDGETS_LIB
-  QApplication
-#else
-  QGuiApplication
-#endif
-{
-  Q_OBJECT
-public:
-    SokolQtApplication()
-    {
+_SOKOL_PRIVATE void _sapp_qt_mouse_event(sapp_event_type type, sapp_mousebutton btn) {
+    if (_sapp_events_enabled()) {
+        _sapp_init_event(type);
+        _sapp.event.modifiers = _sapp_qt_mods();
+        _sapp.event.mouse_button = btn;
+        _sapp.event.mouse_x = _sapp.mouse_x;
+        _sapp.event.mouse_y = _sapp.mouse_y;
+        _sapp_call_event(&_sapp.event);
     }
-};
+}
+
+_SOKOL_PRIVATE QEvent* cloneEvent(QEvent *ev) {
+  if (dynamic_cast<QContextMenuEvent*>(ev))
+	return new QContextMenuEvent(*static_cast<QContextMenuEvent*>(ev));
+  else if (dynamic_cast<QKeyEvent*>(ev))
+	return new QKeyEvent(*static_cast<QKeyEvent*>(ev));
+  else if (dynamic_cast<QMouseEvent*>(ev))
+	return new QMouseEvent(*static_cast<QMouseEvent*>(ev));
+  else if (dynamic_cast<QTabletEvent*>(ev))
+	return new QTabletEvent(*static_cast<QTabletEvent*>(ev));
+  else if (dynamic_cast<QTouchEvent*>(ev))
+	return new QTouchEvent(*static_cast<QTouchEvent*>(ev));
+  else if (dynamic_cast<QWheelEvent*>(ev))
+	return new QWheelEvent(*static_cast<QWheelEvent*>(ev));
+
+  return 0;
+}
+
+_SOKOL_PRIVATE bool recordEvent(QEvent *ev)
+{
+    QEvent *clonedEv = cloneEvent(ev);
+    if (clonedEv){
+        QDateTime curDt(QDateTime::currentDateTime());
+        const int timeOffset = sg_recordingStartTime.daysTo(curDt) * 24 * 3600 * 1000 + sg_recordingStartTime.time().msecsTo(curDt.time());
+        sg_recording.enqueue(EventDelivery(timeOffset, clonedEv));
+#ifdef DEBUG
+        if (sg_recording.size() > 1)
+            qDebug() << "Recorded" << sg_recording.size() << "events.";
+#endif
+        return true;
+    }
+
+    return false;
+}
+
+bool SokolApplicationFilter::eventFilter(QObject *object, QEvent *event)
+{
+    switch (event->type()) {
+        case QEvent::KeyPress:
+        {
+            QKeyEvent *keyEvent = static_cast<QKeyEvent *>(event);
+            if (!keyEvent->isAutoRepeat())
+                Input::registerKeyPress(keyEvent->key());
+        }
+        case QEvent::KeyRelease:
+        {
+            QKeyEvent *keyEvent = static_cast<QKeyEvent *>(event);
+            if (!keyEvent->isAutoRepeat())
+                Input::registerKeyRelease(keyEvent->key());
+        }
+        case QEvent::MouseMove:
+        {
+            QMouseEvent *mouseEvent = static_cast<QMouseEvent *>(event);
+            _sapp.mouse_x = (float)mouseEvent->pos().x();
+            _sapp.mouse_y = (float)mouseEvent->pos().y();
+            _sapp_qt_mouse_event(SAPP_EVENTTYPE_MOUSE_MOVE, SAPP_MOUSEBUTTON_INVALID);
+        }
+        case QEvent::MouseButtonPress:
+        {
+            QMouseEvent *mouseEvent = static_cast<QMouseEvent *>(event);
+            Input::registerMousePress(mouseEvent->button());
+            _sapp_qt_mouse_event(SAPP_EVENTTYPE_MOUSE_DOWN, SAPP_MOUSEBUTTON_MIDDLE);
+        }
+        case QEvent::MouseButtonRelease:
+        {
+            QMouseEvent *mouseEvent = static_cast<QMouseEvent *>(event);
+            Input::registerMouseRelease(mouseEvent->button());
+            _sapp_qt_mouse_event(SAPP_EVENTTYPE_MOUSE_UP, SAPP_MOUSEBUTTON_MIDDLE);
+        }
+        case QEvent::Shortcut:
+        {
+            QShortcutEvent *shortcutEvent = static_cast<QShortcutEvent *>(event);
+            const QKeySequence &ks = shortcutEvent->key();
+        }
+        return false;
+    }
+    return QObject::eventFilter(object, event);
+} // SokolApplicationFilter
 
 _SOKOL_PRIVATE void _sapp_run(const sapp_desc* desc) {
     _SOKOL_UNUSED(desc);
@@ -7474,4 +7536,4 @@ SOKOL_API_IMPL const void* sapp_win32_get_hwnd(void) {
 #pragma warning(pop)
 #endif
 
-#endif /* SOKOL_IMPL */
+#endif /* SOKOL_IMPL || Q_MOC_RUN */

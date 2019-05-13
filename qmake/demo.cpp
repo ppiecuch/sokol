@@ -8,8 +8,8 @@
 #include <QWaitCondition>
 #include <QPainter>
 #include <QWindow>
+#include <QOpenGLWindow>
 #include <QOpenGLContext>
-#include <QApplication>
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -131,48 +131,75 @@ static constexpr const char* fs_src =
 
 // ----- Qt render window -----
 
-class Window : public QWindow
+class GLWindow : public QOpenGLWindow
 {
     Q_OBJECT
 
-private:
+  private:
     bool m_done, m_update_pending, m_resize_pending, m_auto_refresh;
-    QOpenGLContext *m_context;
 
     sg_pipeline pip;
     sg_bindings bind;
     sg_pass_action pass_action;
 
-public:
+  public:
     QPoint cursorPos;
-public:
-    Window(QWindow *parent = 0) : QWindow(parent)
+  public:
+    GLWindow(QOpenGLWindow::UpdateBehavior updateBehavior = NoPartialUpdate,
+             QWindow *parent = 0) : QOpenGLWindow(updateBehavior, parent)
     , m_update_pending(false)
     , m_resize_pending(false)
     , m_auto_refresh(true)
-    , m_context(0)
     , m_done(false) {
-        setSurfaceType(QWindow::OpenGLSurface);
     }
-    ~Window() {
-        /* cleanup */
+    ~GLWindow() {
+        makeCurrent();
         sg_shutdown();
-        m_context->deleteLater();
     }
-    void setAutoRefresh(bool a) { m_auto_refresh = a; }
 
-    void initialize() {
-        qDebug() << "OpenGL infos with gl functions:";
-        qDebug() << "-------------------------------";
-        qDebug() << " Renderer:" << (const char*)glGetString(GL_RENDERER);
-        qDebug() << " Vendor:" << (const char*)glGetString(GL_VENDOR);
-        qDebug() << " OpenGL Version:" << (const char*)glGetString(GL_VERSION);
-        qDebug() << " GLSL Version:" << (const char*)glGetString(GL_SHADING_LANGUAGE_VERSION);
-        setTitle(QString("Qt %1 - %2 (%3)").arg(QT_VERSION_STR).arg((const char*)glGetString(GL_VERSION)).arg((const char*)glGetString(GL_RENDERER)));
+    void setAutoRefresh(bool a) { m_auto_refresh = a; }
+    bool isDone() const { return m_done; }
+    void quit() { m_done = true; }
+
+  protected:
+    virtual void initializeGL() Q_DECL_OVERRIDE {
+        qDebug() << "OpenGL informations:";
+        qDebug() << "--------------------";
+        qDebug() << " Renderer:" << reinterpret_cast<const char*>(glGetString(GL_RENDERER));
+        qDebug() << " Vendor:" << reinterpret_cast<const char*>(glGetString(GL_VENDOR));
+        qDebug() << " OpenGL Version:" << reinterpret_cast<const char*>(glGetString(GL_VERSION));
+        qDebug() << " GLSL Version:" << reinterpret_cast<const char*>(glGetString(GL_SHADING_LANGUAGE_VERSION));
+        setTitle(QString("Qt %1 - %2 (%3)")
+            .arg(QT_VERSION_STR)
+            .arg((const char*)glGetString(GL_VERSION))
+            .arg((const char*)glGetString(GL_RENDERER)));
+
+        QString glType, glVersion, glProfile;
+
+        // Get version information
+        glType = (context()->isOpenGLES()) ? "OpenGL ES" : "OpenGL";
+        glVersion = reinterpret_cast<const char*>(glGetString(GL_VERSION));
+        // Get profile information
+        #define CASE(c) case QSurfaceFormat::c: glProfile = #c; break
+        switch (format().profile())
+        {
+            CASE(NoProfile);
+            CASE(CoreProfile);
+            CASE(CompatibilityProfile);
+        }
+        #undef CASE
+
+        qDebug() << "Context summary:";
+        qDebug() << "----------------";
+        qDebug()
+            << qPrintable(glType)
+            << qPrintable(glVersion)
+            << "(" << qPrintable(glProfile) << ")";
+
 
         /* setup sokol_gfx */
         sg_desc desc{0}; sg_setup(&desc);
-        __dbgui_setup(1);
+        __dbgui_setup(1, devicePixelRatio());
 
         /* a vertex buffer */
         const float vertices[] = {
@@ -221,19 +248,29 @@ public:
         pass_action = { 0 };
 
         /* validate sapp state */
+        _sapp.desc = {
+            .event_cb = __dbgui_event
+        };
+        _sapp.init_called = true;
         _sapp.valid = true;
     }
-    void update() { renderLater(); }
-    void render() {
-        /* draw loop */
-        sg_begin_default_pass(&pass_action, sapp_width(), sapp_height());
-        sg_apply_pipeline(pip);
-        sg_apply_bindings(&bind);
-        sg_draw(0, 3, 1);
-        __dbgui_draw();
-        sg_end_pass();
-        sg_commit();
+    virtual void resizeGL(int width, int height) Q_DECL_OVERRIDE {
+        _sapp.window_width = width;
+        _sapp.window_height = height;
+        _sapp.dpi_scale = devicePixelRatio();
+        _sapp.framebuffer_width = _sapp.window_width * _sapp.dpi_scale;
+        _sapp.framebuffer_height = _sapp.window_height * _sapp.dpi_scale;
     }
+    virtual void paintGL() Q_DECL_OVERRIDE {
+        if (!isExposed()) return;
+        if (isDone()) return;
+        updateEvents();
+        render();
+        if (m_auto_refresh) update();
+    }
+
+  protected:
+    void closeEvent(QCloseEvent *event) { quit(); }
     void mousePressEvent(QMouseEvent *event) {
         cursorPos = QPoint(event->x(), event->y());
         Qt::KeyboardModifiers modifiers = event->modifiers();
@@ -246,70 +283,34 @@ public:
     }
     void mouseMoveEvent(QMouseEvent *event) {
         cursorPos = QPoint(event->x(), event->y());
-        // __dbgui_event()
     }
     void keyPressEvent(QKeyEvent* event) {
         switch(event->key()) {
-            case Qt::Key_Escape: close(); break;
+            case Qt::Key_Escape:
+            case Qt::Key_Q: close(); break;
             default: event->ignore();
             break;
         }
     }
-    void quit() { m_done = true; }
-    bool done() const { return m_done; }
 
-protected:
-    void closeEvent(QCloseEvent *event) { quit(); }
-    bool event(QEvent *event) {
-        switch (event->type()) {
-            case QEvent::UpdateRequest:
-                m_update_pending = false;
-                renderNow();
-                return true;
-            default:
-                return QWindow::event(event);
-        }
-    }
-    void exposeEvent(QExposeEvent *event) {
-        Q_UNUSED(event);
-        if (isExposed()) renderNow();
-    }
-    void resizeEvent(QResizeEvent *event)
-    {
-        _sapp.window_width = event->size().width();
-        _sapp.window_height = event->size().height();
-        _sapp.dpi_scale = devicePixelRatio();
-        _sapp.framebuffer_width = _sapp.window_width * _sapp.dpi_scale;
-        _sapp.framebuffer_height = _sapp.window_height * _sapp.dpi_scale;
+  private:
+    void updateEvents() {
+        /*while( const EventDelivery *ev = Input::dequeueRecordedEvent()) {
 
-        renderLater();
+        }*/
     }
-    public slots:
-    void renderLater() {
-        if (!m_update_pending) {
-            m_update_pending = true;
-            QCoreApplication::postEvent(this, new QEvent(QEvent::UpdateRequest));
-        }
+    void render() {
+        /* draw loop */
+        sg_begin_default_pass(&pass_action, sapp_width(), sapp_height());
+        sg_apply_pipeline(pip);
+        sg_apply_bindings(&bind);
+        sg_draw(0, 3, 1);
+        __dbgui_draw();
+        sg_end_pass();
+        sg_commit();
     }
-    void renderNow() {
-        if (!isExposed()) return;
-        bool needsInitialize = false;
-        if (!m_context) {
-            m_context = new QOpenGLContext(this);
-            m_context->setFormat(requestedFormat());
-            m_context->create();
-            needsInitialize = true;
-        }
-        m_context->makeCurrent(this);
-        if (needsInitialize) {
-            initialize();
-        }
-        render();
-        m_context->swapBuffers(this);
-        if (m_auto_refresh) renderLater();
-    }
-private:
 };
+
 
 int main(int argc, char *argv[])
 {
@@ -330,8 +331,8 @@ int main(int argc, char *argv[])
     surface_format.setProfile( QSurfaceFormat::CoreProfile );
     QSurfaceFormat::setDefaultFormat( surface_format );
 
-    QApplication app(argc, argv);
-    Window w;
+    SokolQtApplication app(argc, argv);
+    GLWindow w;
     w.resize(800,600);
     w.show();
     app.exec();

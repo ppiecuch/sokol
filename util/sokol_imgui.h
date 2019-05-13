@@ -169,7 +169,6 @@
 #define SOKOL_IMGUI_INCLUDED (1)
 #include <stdint.h>
 #include <stdbool.h>
-#include <stdio.h>
 
 #if !defined(SOKOL_GFX_INCLUDED)
 # error "Please include sokol_gfx.h before sokol_imgui.h"
