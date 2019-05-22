@@ -2,6 +2,8 @@
 /*
     sokol_gfx.h -- simple 3D API wrapper
 
+    Project URL: https://github.com/floooh/sokol
+
     Do this:
         #define SOKOL_IMPL
     before you include this file in *one* C or C++ file to create the
@@ -80,6 +82,10 @@
     For complete code examples using the various backend 3D-APIs, see:
 
         https://github.com/floooh/sokol-samples
+
+    For an optional shader-cross-compile solution, see:
+
+        https://github.com/floooh/sokol-tools/blob/master/docs/sokol-shdc.md
 
 
     STEP BY STEP
@@ -1326,11 +1332,34 @@ typedef struct sg_image_desc {
 /*
     sg_shader_desc
 
-    The structure sg_shader_desc describes the shaders, uniform blocks
-    texture images and vertex-attribute-names/semantics (required
-    for GLES2 and D3D11) of a shader stage.
+    The structure sg_shader_desc defines all creation parameters
+    for shader programs, used as input to the sg_make_shader() function:
 
-    TODO: source code vs byte code, 3D backend API specifics.
+    - reflection information for vertex attributes (vertex shader inputs):
+        - vertex attribute name (required for GLES2, optional for GLES3 and GL)
+        - a semantic name and index (required for D3D11)
+    - for each vertex- and fragment-shader-stage:
+        - the shader source or bytecode
+        - an optional entry function name
+        - reflection info for each uniform block used by the shader stage:
+            - the size of the uniform block in bytes
+            - reflection info for each uniform block member (only required for GL backends):
+                - member name
+                - member type (SG_UNIFORMTYPE_xxx)
+                - if the member is an array, the number of array items
+        - reflection info for the texture images used by the shader stage:
+            - the image type (SG_IMAGETYPE_xxx)
+            - the name of the texture sampler (required for GLES2, optional everywhere else)
+
+    For all GL backends, shader source-code must be provided. For D3D11 and Metal,
+    either shader source-code or byte-code can be provided. If source code
+    is provided for D3D11, define SOKOL_D3D11_SHADER_COMPILER before
+    including the sokol_gfx.h implementation, this will link the executable
+    with the D3D shader compiler DLL which is required to compile
+    HLSL to D3D bytecode.
+
+    (FIXME: the D3D shader compiler DLL should not be linked, but loaded
+    on demand with LoadLibrary).
 */
 typedef struct sg_shader_attr_desc {
     const char* name;           /* GLSL vertex attribute name (only required for GLES2) */
@@ -1379,7 +1408,7 @@ typedef struct sg_shader_desc {
     for an sg_pipeline object, used as argument to the
     sg_make_pipeline() function:
 
-    - the complete vertex layout for all input vertex buffers
+    - the vertex layout for all input vertex buffers
     - a shader object
     - the 3D primitive type (points, lines, triangles, ...)
     - the index type (none, 16- or 32-bit)
@@ -1405,9 +1434,6 @@ typedef struct sg_shader_desc {
             .buffer_index   0 the vertex buffer bind slot
             .offset         0 (offsets can be omitted if the vertex layout has no gaps)
             .format         SG_VERTEXFORMAT_INVALID (must be initialized!)
-            .name           0 (GLES2 requires an attribute name here)
-            .sem_name       0 (D3D11 requires a semantic name here)
-            .sem_index      0 (D3D11 requires a semantic index here)
     .shader:            0 (must be intilized with a valid sg_shader id!)
     .primitive_type:    SG_PRIMITIVETYPE_TRIANGLES
     .index_type:        SG_INDEXTYPE_NONE
@@ -3894,8 +3920,10 @@ _SOKOL_PRIVATE void _sg_gl_clear_texture_bindings(bool force) {
             glBindTexture(GL_TEXTURE_2D, 0);
             glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
             #if !defined(SOKOL_GLES2)
-            glBindTexture(GL_TEXTURE_3D, 0);
-            glBindTexture(GL_TEXTURE_2D_ARRAY, 0);
+            if (!_sg.gl.gles2) {
+                glBindTexture(GL_TEXTURE_3D, 0);
+                glBindTexture(GL_TEXTURE_2D_ARRAY, 0);
+            }
             #endif
             _sg.gl.cache.textures[i].target = 0;
             _sg.gl.cache.textures[i].texture = 0;
@@ -4020,62 +4048,68 @@ _SOKOL_PRIVATE void _sg_setup_backend(const sg_desc* desc) {
         glGetIntegerv(GL_NUM_EXTENSIONS, &num_ext);
         for (int i = 0; i < num_ext; i++) {
             const char* ext = (const char*) glGetStringi(GL_EXTENSIONS, i);
-            if (strstr(ext, "_texture_compression_s3tc")) {
-                _sg.gl.features[SG_FEATURE_TEXTURE_COMPRESSION_DXT] = true;
-                continue;
-            }
-            else if (strstr(ext, "_texture_filter_anisotropic")) {
-                _sg.gl.ext_anisotropic = true;
-                continue;
+            if (ext) {
+                if (strstr(ext, "_texture_compression_s3tc")) {
+                    _sg.gl.features[SG_FEATURE_TEXTURE_COMPRESSION_DXT] = true;
+                    continue;
+                }
+                else if (strstr(ext, "_texture_filter_anisotropic")) {
+                    _sg.gl.ext_anisotropic = true;
+                    continue;
+                }
             }
         }
     #elif defined(SOKOL_GLES3)
         const char* ext = (const char*) glGetString(GL_EXTENSIONS);
-        if (!_sg.gl.gles2) {
-            _sg.gl.features[SG_FEATURE_INSTANCING] = true;
-            _sg.gl.features[SG_FEATURE_TEXTURE_FLOAT] = true;
-            _sg.gl.features[SG_FEATURE_TEXTURE_HALF_FLOAT] = true;
-            _sg.gl.features[SG_FEATURE_IMAGETYPE_3D] = true;
-            _sg.gl.features[SG_FEATURE_IMAGETYPE_ARRAY] = true;
-            _sg.gl.features[SG_FEATURE_MSAA_RENDER_TARGETS] = true;
-            _sg.gl.features[SG_FEATURE_PACKED_VERTEX_FORMAT_10_2] = true;
-            _sg.gl.features[SG_FEATURE_MULTIPLE_RENDER_TARGET] = true;
+        if (ext) {
+            if (!_sg.gl.gles2) {
+                _sg.gl.features[SG_FEATURE_INSTANCING] = true;
+                _sg.gl.features[SG_FEATURE_TEXTURE_FLOAT] = true;
+                _sg.gl.features[SG_FEATURE_TEXTURE_HALF_FLOAT] = true;
+                _sg.gl.features[SG_FEATURE_IMAGETYPE_3D] = true;
+                _sg.gl.features[SG_FEATURE_IMAGETYPE_ARRAY] = true;
+                _sg.gl.features[SG_FEATURE_MSAA_RENDER_TARGETS] = true;
+                _sg.gl.features[SG_FEATURE_PACKED_VERTEX_FORMAT_10_2] = true;
+                _sg.gl.features[SG_FEATURE_MULTIPLE_RENDER_TARGET] = true;
+            }
+            else {
+                _sg.gl.features[SG_FEATURE_INSTANCING] = strstr(ext, "_instanced_arrays");
+                _sg.gl.features[SG_FEATURE_TEXTURE_FLOAT] = strstr(ext, "_texture_float");
+                _sg.gl.features[SG_FEATURE_TEXTURE_HALF_FLOAT] = strstr(ext, "_texture_half_float");
+            }
+            _sg.gl.features[SG_FEATURE_TEXTURE_COMPRESSION_DXT] =
+                strstr(ext, "_texture_compression_s3tc") ||
+                strstr(ext, "_compressed_texture_s3tc") ||
+                strstr(ext, "texture_compression_dxt1");
+            _sg.gl.features[SG_FEATURE_TEXTURE_COMPRESSION_PVRTC] =
+                strstr(ext, "_texture_compression_pvrtc") ||
+                strstr(ext, "_compressed_texture_pvrtc");
+            _sg.gl.features[SG_FEATURE_TEXTURE_COMPRESSION_ATC] =
+                strstr(ext, "_compressed_texture_atc");
+            _sg.gl.ext_anisotropic =
+                strstr(ext, "_texture_filter_anisotropic");
         }
-        else {
-            _sg.gl.features[SG_FEATURE_INSTANCING] = strstr(ext, "_instanced_arrays");
-            _sg.gl.features[SG_FEATURE_TEXTURE_FLOAT] = strstr(ext, "_texture_float");
-            _sg.gl.features[SG_FEATURE_TEXTURE_HALF_FLOAT] = strstr(ext, "_texture_half_float");
-        }
-        _sg.gl.features[SG_FEATURE_TEXTURE_COMPRESSION_DXT] =
-            strstr(ext, "_texture_compression_s3tc") ||
-            strstr(ext, "_compressed_texture_s3tc") ||
-            strstr(ext, "texture_compression_dxt1");
-        _sg.gl.features[SG_FEATURE_TEXTURE_COMPRESSION_PVRTC] =
-            strstr(ext, "_texture_compression_pvrtc") ||
-            strstr(ext, "_compressed_texture_pvrtc");
-        _sg.gl.features[SG_FEATURE_TEXTURE_COMPRESSION_ATC] =
-            strstr(ext, "_compressed_texture_atc");
-        _sg.gl.ext_anisotropic =
-            strstr(ext, "_texture_filter_anisotropic");
     #elif defined(SOKOL_GLES2)
         const char* ext = (const char*) glGetString(GL_EXTENSIONS);
-        _sg.gl.features[SG_FEATURE_INSTANCING] =
-            strstr(ext, "_instanced_arrays");
-        _sg.gl.features[SG_FEATURE_TEXTURE_FLOAT] =
-            strstr(ext, "_texture_float");
-        _sg.gl.features[SG_FEATURE_TEXTURE_HALF_FLOAT] =
-            strstr(ext, "_texture_half_float");
-        _sg.gl.features[SG_FEATURE_TEXTURE_COMPRESSION_DXT] =
-            strstr(ext, "_texture_compression_s3tc") ||
-            strstr(ext, "_compressed_texture_s3tc") ||
-            strstr(ext, "texture_compression_dxt1");
-        _sg.gl.features[SG_FEATURE_TEXTURE_COMPRESSION_PVRTC] =
-            strstr(ext, "_texture_compression_pvrtc") ||
-            strstr(ext, "_compressed_texture_pvrtc");
-        _sg.gl.features[SG_FEATURE_TEXTURE_COMPRESSION_ATC] =
-            strstr(ext, "_compressed_texture_atc");
-        _sg.gl.ext_anisotropic =
-            strstr(ext, "_texture_filter_anisotropic");
+        if (ext) {
+            _sg.gl.features[SG_FEATURE_INSTANCING] =
+                strstr(ext, "_instanced_arrays");
+            _sg.gl.features[SG_FEATURE_TEXTURE_FLOAT] =
+                strstr(ext, "_texture_float");
+            _sg.gl.features[SG_FEATURE_TEXTURE_HALF_FLOAT] =
+                strstr(ext, "_texture_half_float");
+            _sg.gl.features[SG_FEATURE_TEXTURE_COMPRESSION_DXT] =
+                strstr(ext, "_texture_compression_s3tc") ||
+                strstr(ext, "_compressed_texture_s3tc") ||
+                strstr(ext, "texture_compression_dxt1");
+            _sg.gl.features[SG_FEATURE_TEXTURE_COMPRESSION_PVRTC] =
+                strstr(ext, "_texture_compression_pvrtc") ||
+                strstr(ext, "_compressed_texture_pvrtc");
+            _sg.gl.features[SG_FEATURE_TEXTURE_COMPRESSION_ATC] =
+                strstr(ext, "_compressed_texture_atc");
+            _sg.gl.ext_anisotropic =
+                strstr(ext, "_texture_filter_anisotropic");
+        }
     #endif
     _sg.gl.max_anisotropy = 1;
     if (_sg.gl.ext_anisotropic) {
