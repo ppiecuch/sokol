@@ -19,6 +19,8 @@
     SOKOL_API_DECL      - public function declaration prefix (default: extern)
     SOKOL_API_IMPL      - public function implementation prefix (default: -)
 
+    SAUDIO_RING_MAX_SLOTS   - max number of slots in the push-audio ring buffer (default 1024)
+
     If sokol_audio.h is compiled as a DLL, define the following before
     including the declaration or implementation:
 
@@ -110,7 +112,7 @@
 
     If you want to use the callback-model, you need to provide a stream
     callback function either in saudio_desc.stream_cb or saudio_desc.stream_userdata_cb,
-    otherwised keep both function pointers zero-initialized.
+    otherwise keep both function pointers zero-initialized.
 
     Use push model and default playback parameters:
 
@@ -168,7 +170,7 @@
     plugging in a bluetooth headset, this case is currently not handled in
     Sokol Audio).
 
-    You can check if audio initialization was successfull with
+    You can check if audio initialization was successful with
     saudio_isvalid(). If backend initialization failed for some reason
     (for instance when there's no audio device in the machine), this
     will return false. Not checking for success won't do any harm, all
@@ -456,7 +458,7 @@ SOKOL_API_DECL int saudio_push(const float* frames, int num_frames);
 #endif
 
 #if (defined(__APPLE__) || defined(__linux__) || defined(__unix__)) && !defined(__EMSCRIPTEN__)
-    #include "pthread.h"
+    #include <pthread.h>
 #elif defined(_WIN32)
     #ifndef WIN32_LEAN_AND_MEAN
     #define WIN32_LEAN_AND_MEAN
@@ -516,7 +518,10 @@ SOKOL_API_DECL int saudio_push(const float* frames, int num_frames);
 #define _SAUDIO_DEFAULT_BUFFER_FRAMES (2048)
 #define _SAUDIO_DEFAULT_PACKET_FRAMES (128)
 #define _SAUDIO_DEFAULT_NUM_PACKETS ((_SAUDIO_DEFAULT_BUFFER_FRAMES/_SAUDIO_DEFAULT_PACKET_FRAMES)*4)
-#define _SAUDIO_RING_MAX_SLOTS (128)
+
+#ifndef SAUDIO_RING_MAX_SLOTS
+#define SAUDIO_RING_MAX_SLOTS (1024)
+#endif
 
 /*=== MUTEX WRAPPER DECLARATIONS =============================================*/
 #if (defined(__APPLE__) || defined(__linux__) || defined(__unix__)) && !defined(__EMSCRIPTEN__)
@@ -595,7 +600,7 @@ typedef struct {
     int head;  /* next slot to write to */
     int tail;  /* next slot to read from */
     int num;   /* number of slots in queue */
-    int queue[_SAUDIO_RING_MAX_SLOTS];
+    int queue[SAUDIO_RING_MAX_SLOTS];
 } _saudio_ring_t;
 
 /* a packet FIFO structure */
@@ -692,7 +697,7 @@ _SOKOL_PRIVATE uint16_t _saudio_ring_idx(_saudio_ring_t* ring, int i) {
 }
 
 _SOKOL_PRIVATE void _saudio_ring_init(_saudio_ring_t* ring, int num_slots) {
-    SOKOL_ASSERT((num_slots + 1) <= _SAUDIO_RING_MAX_SLOTS);
+    SOKOL_ASSERT((num_slots + 1) <= SAUDIO_RING_MAX_SLOTS);
     ring->head = 0;
     ring->tail = 0;
     /* one slot reserved to detect 'full' vs 'empty' */
@@ -1112,6 +1117,7 @@ _SOKOL_PRIVATE void _saudio_wasapi_release(void) {
 }
 
 _SOKOL_PRIVATE bool _saudio_backend_init(void) {
+    REFERENCE_TIME dur;
     if (FAILED(CoInitializeEx(0, COINIT_MULTITHREADED))) {
         SOKOL_LOG("sokol_audio wasapi: CoInitializeEx failed");
         return false;
@@ -1152,7 +1158,7 @@ _SOKOL_PRIVATE bool _saudio_backend_init(void) {
     fmt.wBitsPerSample = 16;
     fmt.nBlockAlign = (fmt.nChannels * fmt.wBitsPerSample) / 8;
     fmt.nAvgBytesPerSec = fmt.nSamplesPerSec * fmt.nBlockAlign;
-    REFERENCE_TIME dur = (REFERENCE_TIME)
+    dur = (REFERENCE_TIME)
         (((double)_saudio.buffer_frames) / (((double)_saudio.sample_rate) * (1.0/10000000.0)));
     if (FAILED(IAudioClient_Initialize(_saudio.backend.audio_client,
         AUDCLNT_SHAREMODE_SHARED,
