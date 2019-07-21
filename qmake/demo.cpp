@@ -25,7 +25,7 @@
 #define SOKOL_IMPL
 #include <sokol_app.h>
 #include <sokol_gfx.h>
-#include <ui/dbgui.h>
+#include <dbgui/dbgui.h>
 
 class SleepSimulator {
     QMutex localMutex;

@@ -25,6 +25,14 @@
 
     SOKOL_DEBUG         - by default this is defined if _DEBUG is defined
 
+    If sokol_app.h is compiled as a DLL, define the following before
+    including the declaration or implementation:
+
+    SOKOL_DLL
+
+    On Windows, SOKOL_DLL will define SOKOL_API_DECL as __declspec(dllexport)
+    or __declspec(dllimport) as needed.
+
     Portions of the Windows and Linux GL initialization and event code have been
     taken from GLFW (http://www.glfw.org/)
 
@@ -167,6 +175,12 @@
             These are the user-data versions of the callback functions. You
             can mix those with the standard callbacks that don't have the
             user_data argument.
+
+        The function sapp_userdata() can be used to query the user_data
+        pointer provided in the sapp_desc struct.
+
+        You you can call sapp_query_desc() to get a copy(!) of the
+        original sapp_desc structure.
 
         NOTE that there's also an alternative compile mode where sokol_app.h
         doesn't "hijack" the main() function. Search below for SOKOL_NO_ENTRY.
@@ -389,7 +403,13 @@
 #include <stdbool.h>
 
 #ifndef SOKOL_API_DECL
-    #define SOKOL_API_DECL extern
+#if defined(_WIN32) && defined(SOKOL_DLL) && defined(SOKOL_IMPL)
+#define SOKOL_API_DECL __declspec(dllexport)
+#elif defined(_WIN32) && defined(SOKOL_DLL)
+#define SOKOL_API_DECL __declspec(dllimport)
+#else
+#define SOKOL_API_DECL extern
+#endif
 #endif
 
 #ifdef __cplusplus
@@ -635,6 +655,8 @@ SOKOL_API_DECL bool sapp_high_dpi(void);
 SOKOL_API_DECL float sapp_dpi_scale(void);
 SOKOL_API_DECL void sapp_show_keyboard(bool visible);
 SOKOL_API_DECL bool sapp_keyboard_shown(void);
+SOKOL_API_DECL void* sapp_userdata(void);
+SOKOL_API_DECL sapp_desc sapp_query_desc(void);
 
 /* GL/GLES specific functions */
 SOKOL_API_DECL bool sapp_gles2(void);
@@ -2571,7 +2593,7 @@ EMSCRIPTEN_KEEPALIVE void _sapp_emsc_notify_keyboard_hidden(void) {
 #endif
 
 /* Javascript helper functions for mobile virtual keyboard input */
-EM_JS(void, _sapp_js_create_textfield, (void), {
+EM_JS(void, sapp_js_create_textfield, (void), {
     var _sapp_inp = document.createElement("input");
     _sapp_inp.type = "text";
     _sapp_inp.id = "_sokol_app_input_element";
@@ -2583,11 +2605,11 @@ EM_JS(void, _sapp_js_create_textfield, (void), {
     document.body.append(_sapp_inp);
 });
 
-EM_JS(void, _sapp_js_focus_textfield, (void), {
+EM_JS(void, sapp_js_focus_textfield, (void), {
     document.getElementById("_sokol_app_input_element").focus();
 });
 
-EM_JS(void, _sapp_js_unfocus_textfield, (void), {
+EM_JS(void, sapp_js_unfocus_textfield, (void), {
     document.getElementById("_sokol_app_input_element").blur();
 });
 
@@ -2600,19 +2622,19 @@ _SOKOL_PRIVATE void _sapp_emsc_update_keyboard_state(void) {
         /* create input text field on demand */
         if (!_sapp_emsc_input_created) {
             _sapp_emsc_input_created = true;
-            _sapp_js_create_textfield();
+            sapp_js_create_textfield();
         }
         /* focus the text input field, this will bring up the keyboard */
         _sapp.onscreen_keyboard_shown = true;
         _sapp_emsc_wants_show_keyboard = false;
-        _sapp_js_focus_textfield();
+        sapp_js_focus_textfield();
     }
     if (_sapp_emsc_wants_hide_keyboard) {
         /* unfocus the text input field */
         if (_sapp_emsc_input_created) {
             _sapp.onscreen_keyboard_shown = false;
             _sapp_emsc_wants_hide_keyboard = false;
-            _sapp_js_unfocus_textfield();
+            sapp_js_unfocus_textfield();
         }
     }
 }
@@ -7118,6 +7140,7 @@ _SOKOL_PRIVATE sapp_keycode _sapp_x11_translate_key(int scancode) {
         case XK_KP_Down:        return SAPP_KEYCODE_KP_2;
         case XK_KP_Page_Down:   return SAPP_KEYCODE_KP_3;
         case XK_KP_Left:        return SAPP_KEYCODE_KP_4;
+        case XK_KP_Begin:       return SAPP_KEYCODE_KP_5;
         case XK_KP_Right:       return SAPP_KEYCODE_KP_6;
         case XK_KP_Home:        return SAPP_KEYCODE_KP_7;
         case XK_KP_Up:          return SAPP_KEYCODE_KP_8;
@@ -7396,6 +7419,14 @@ SOKOL_API_IMPL int sapp_run(const sapp_desc* desc) {
 
 SOKOL_API_IMPL bool sapp_isvalid(void) {
     return _sapp.valid;
+}
+
+SOKOL_API_IMPL void* sapp_userdata(void) {
+    return _sapp.desc.user_data;
+}
+
+SOKOL_API_IMPL sapp_desc sapp_query_desc(void) {
+    return _sapp.desc;
 }
 
 SOKOL_API_IMPL int sapp_width(void) {
