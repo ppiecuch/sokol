@@ -517,12 +517,6 @@
 #endif
 #endif
 
-#if !defined(SOKOL_API_DECL) && !defined(SOKOL_IMPL)
-# define SOKOL_API_DECL extern
-#else
-# define SOKOL_API_DECL
-#endif
-
 #if defined(__cplusplus)
 # define BEGIN_EXTERN_C extern "C" {
 # define END_EXTERN_C }
@@ -2096,6 +2090,14 @@ SOKOL_API_DECL void sg_discard_context(sg_context ctx_id);
 #endif
 
 END_EXTERN_C
+
+#ifdef __cplusplus
+  inline SOKOL_API_DECL void sg_setup(const sg_desc& desc) { sg_setup(&desc); }
+  inline SOKOL_API_DECL sg_buffer sg_make_buffer(const sg_buffer_desc& desc) { return sg_make_buffer(&desc); }
+  inline SOKOL_API_DECL sg_shader sg_make_shader(const sg_shader_desc& desc) { return sg_make_shader(&desc); }
+  inline SOKOL_API_DECL sg_pipeline sg_make_pipeline(const sg_pipeline_desc &desc)  { return sg_make_pipeline(&desc); }
+#endif
+
 #endif // SOKOL_GFX_INCLUDED
 
 /*--- IMPLEMENTATION ---------------------------------------------------------*/
@@ -2148,14 +2150,14 @@ END_EXTERN_C
     #endif
 #endif
 
-#if !defined(_SOKOL_PRIVATE)
+#ifndef _SOKOL_PRIVATE
     #if defined(__GNUC__)
         #define _SOKOL_PRIVATE __attribute__((unused)) static
     #else
         #define _SOKOL_PRIVATE static
     #endif
 #else
-        #define _SOKOL_PRIVATE
+    #define _SOKOL_PRIVATE
 #endif
 
 #ifndef _SOKOL_UNUSED

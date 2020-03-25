@@ -19,14 +19,6 @@
 #include <alloca.h>
 #include <math.h>
 
-#define HANDMADE_MATH_IMPLEMENTATION
-#define HANDMADE_MATH_NO_SSE
-#include "HandmadeMath.h"
-#define SOKOL_IMPL
-#include <sokol_app.h>
-#include <sokol_gfx.h>
-#include <dbgui/dbgui.h>
-
 class SleepSimulator {
     QMutex localMutex;
     QWaitCondition sleepSimulator;
@@ -47,87 +39,6 @@ void qtDelay(long ms) {
     SleepSimulator s;
     s.sleep(ms);
 }
-
-// ----- Basic shaders -----
-
-#if defined(SOKOL_GLCORE33)
-static constexpr const char* vs_src =
-    "#version 330\n"
-    "in vec4 position;\n"
-    "in vec4 color0;\n"
-    "out vec4 color;\n"
-    "void main() {\n"
-    "  gl_Position = position;\n"
-    "  color = color0;\n"
-    "}\n";
-static constexpr const char* fs_src =
-    "#version 330\n"
-    "in vec4 color;\n"
-    "out vec4 frag_color;\n"
-    "void main() {\n"
-    "  frag_color = color;\n"
-    "}\n";
-#elif defined(SOKOL_GLES3) || defined(SOKOL_GLES2)
-static constexpr const char* vs_src =
-    "attribute vec4 position;\n"
-    "attribute vec4 color0;\n"
-    "varying vec4 color;\n"
-    "void main() {\n"
-    "  gl_Position = position;\n"
-    "  color = color0;\n"
-    "}\n";
-static constexpr const char* fs_src =
-    "precision mediump float;\n"
-    "varying vec4 color;\n"
-    "void main() {\n"
-    "  gl_FragColor = color;\n"
-    "}\n";
-#elif defined(SOKOL_METAL)
-static constexpr const char* vs_src =
-    "#include <metal_stdlib>\n"
-    "using namespace metal;\n"
-    "struct vs_in {\n"
-    "  float4 position [[attribute(0)]];\n"
-    "  float4 color [[attribute(1)]];\n"
-    "};\n"
-    "struct vs_out {\n"
-    "  float4 position [[position]];\n"
-    "  float4 color;\n"
-    "};\n"
-    "vertex vs_out _main(vs_in inp [[stage_in]]) {\n"
-    "  vs_out outp;\n"
-    "  outp.position = inp.position;\n"
-    "  outp.color = inp.color;\n"
-    "  return outp;\n"
-    "}\n";
-static constexpr const char* fs_src =
-    "#include <metal_stdlib>\n"
-    "using namespace metal;\n"
-    "fragment float4 _main(float4 color [[stage_in]]) {\n"
-    "  return color;\n"
-    "};\n";
-#elif defined(SOKOL_D3D11)
-static constexpr const char* vs_src =
-    "struct vs_in {\n"
-    "  float4 pos: POS;\n"
-    "  float4 color: COLOR;\n"
-    "};\n"
-    "struct vs_out {\n"
-    "  float4 color: COLOR0;\n"
-    "  float4 pos: SV_Position;\n"
-    "};\n"
-    "vs_out main(vs_in inp) {\n"
-    "  vs_out outp;\n"
-    "  outp.pos = inp.pos;\n"
-    "  outp.color = inp.color;\n"
-    "  return outp;\n"
-    "}\n";
-static constexpr const char* fs_src =
-    "float4 main(float4 color: COLOR0): SV_Target0 {\n"
-    "  return color;\n"
-    "}\n";
-#endif
-
 
 // ----- Qt render window -----
 
@@ -199,7 +110,6 @@ class GLWindow : public QOpenGLWindow
 
         /* setup sokol_gfx */
         sg_desc desc{0}; sg_setup(&desc);
-        __dbgui_setup(1, devicePixelRatio());
 
         /* a vertex buffer */
         const float vertices[] = {
@@ -220,13 +130,38 @@ class GLWindow : public QOpenGLWindow
 
         /* a shader */
         sg_shader_desc shader_desc = {
+            /* vertex attribute lookup by name is optional in GL3.x, we
+               could also use "layout(location=N)" in the shader */
             .attrs = {
-                [0] = { .name="position", .sem_name="POS" },
-                [1] = { .name="color0", .sem_name="COLOR" }
+                [0].name = "position",
+                [1].name = "color0"
             },
-            .vs.source = vs_src,
-            .fs.source = fs_src,
-            .label = "triangle-shader"
+            .vs.source =
+#if defined(QT_OPENGL_ES) || defined(QT_OPENGL_ES_2)
+                "#version 100\n"
+#else
+                "#version 120\n"
+#endif
+                "attribute vec4 position;\n"
+                "attribute vec4 color0;\n"
+                "varying vec4 color;\n"
+                "void main() {\n"
+                "  gl_Position = position;\n"
+                "  color = color0;\n"
+                "}\n",
+            .fs.source =
+#if defined(QT_OPENGL_ES) || defined(QT_OPENGL_ES_2)
+                "#version 100\n"
+#else
+                "#version 120\n"
+#endif
+                "#ifdef GL_ES\n"
+                "precision mediump float;\n"
+                "#endif\n"
+                "varying vec4 color;\n"
+                "void main() {\n"
+                "  gl_FragColor = color;\n"
+                "}\n"
         };
         sg_shader shd = sg_make_shader(&shader_desc);
 
@@ -249,10 +184,14 @@ class GLWindow : public QOpenGLWindow
 
         /* validate sapp state */
         _sapp.desc = {
-            .event_cb = __dbgui_event
+            .event_cb = __dbgui_event,
+            .high_dpi = true
         };
         _sapp.init_called = true;
         _sapp.valid = true;
+        _sapp.dpi_scale = devicePixelRatio();
+
+        __dbgui_setup(1);
     }
     virtual void resizeGL(int width, int height) Q_DECL_OVERRIDE {
         _sapp.window_width = width;
@@ -271,20 +210,20 @@ class GLWindow : public QOpenGLWindow
 
   protected:
     void closeEvent(QCloseEvent *event) { quit(); }
-    void mousePressEvent(QMouseEvent *event) {
+    void mousePressEvent(QMouseEvent *event) Q_DECL_OVERRIDE {
         cursorPos = QPoint(event->x(), event->y());
         Qt::KeyboardModifiers modifiers = event->modifiers();
         if (event->buttons() & Qt::LeftButton) { }
     }
-    void mouseReleaseEvent(QMouseEvent *event) {
+    void mouseReleaseEvent(QMouseEvent *event) Q_DECL_OVERRIDE {
         cursorPos = QPoint(event->x(), event->y());
         Qt::KeyboardModifiers modifiers = event->modifiers();
         if (event->button() == Qt::LeftButton) { }
     }
-    void mouseMoveEvent(QMouseEvent *event) {
+    void mouseMoveEvent(QMouseEvent *event) Q_DECL_OVERRIDE {
         cursorPos = QPoint(event->x(), event->y());
     }
-    void keyPressEvent(QKeyEvent* event) {
+    void keyPressEvent(QKeyEvent* event) Q_DECL_OVERRIDE {
         switch(event->key()) {
             case Qt::Key_Escape:
             case Qt::Key_Q: close(); break;
@@ -327,8 +266,8 @@ int main(int argc, char *argv[])
     // surface_format.setStencilBufferSize( 8 );
     // surface_format.setSwapBehavior( QSurfaceFormat::DefaultSwapBehavior );
     // surface_format.setSwapInterval( 1 );
-    surface_format.setVersion( 3, 3 );
-    surface_format.setProfile( QSurfaceFormat::CoreProfile );
+    //surface_format.setVersion( 3, 3 );
+    //surface_format.setProfile( QSurfaceFormat::CoreProfile );
     QSurfaceFormat::setDefaultFormat( surface_format );
 
     SokolQtApplication app(argc, argv);

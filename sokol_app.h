@@ -866,7 +866,6 @@ SOKOL_API_DECL const void* sapp_android_get_native_activity(void);
 #ifdef __cplusplus
 } /* extern "C" */
 #endif
-#endif // SOKOL_APP_INCLUDED
 
 #if defined(QT_GUI_LIB)
     #include <qobject.h>
@@ -949,6 +948,8 @@ SOKOL_API_DECL const void* sapp_android_get_native_activity(void);
         }
     };
 #endif // QT_GUI_LIB
+#endif // SOKOL_APP_INCLUDED
+
 
 /*-- IMPLEMENTATION ----------------------------------------------------------*/
 #if defined(SOKOL_IMPL)
@@ -968,7 +969,7 @@ SOKOL_API_DECL const void* sapp_android_get_native_activity(void);
 
 /* check if the config defines are alright */
 #if defined(QT_GUI_LIB)
-
+    // nothing
 #elif defined(__APPLE__)
     #if !__has_feature(objc_arc)
         #error "sokol_app.h requires ARC (Automatic Reference Counting) on MacOS and iOS"
@@ -1261,9 +1262,13 @@ _SOKOL_PRIVATE void _sapp_frame(void) {
 #include <qqueue.h>
 #include <qevent.h>
 #include <qgesture.h>
+#include <qclipboard.h>
 #include <qopenglcontext.h>
-#include <qopenglfunctions.h>
-#include <qopenglextrafunctions.h>
+#if defined(QT_OPENGL_ES_3)
+# include <qopenglextrafunctions.h>
+#else
+# include <qopenglfunctions.h>
+#endif
 
 typedef unsigned int  GLenum;
 typedef unsigned int  GLuint;
@@ -1429,7 +1434,11 @@ typedef int  GLint;
 #define GL_ONE_MINUS_SRC_COLOR 0x0301
 #define GL_MIRRORED_REPEAT 0x8370
 
-#define _SAPP_QT_PROC(name) QOpenGLContext::currentContext()->extraFunctions()->name
+#if defined(QT_OPENGL_ES_3)
+# define _SAPP_QT_PROC(name) QOpenGLContext::currentContext()->extraFunctions()->name
+#else
+# define _SAPP_QT_PROC(name) QOpenGLContext::currentContext()->functions()->name
+#endif
 
 #define glBindVertexArray _SAPP_QT_PROC(glBindVertexArray)
 #define glFramebufferTextureLayer _SAPP_QT_PROC(glFramebufferTextureLayer)
@@ -1480,7 +1489,8 @@ typedef int  GLint;
 #define glTexImage3D _SAPP_QT_PROC(glTexImage3D)
 #define glCreateShader _SAPP_QT_PROC(glCreateShader)
 #define glTexSubImage2D _SAPP_QT_PROC(glTexSubImage2D)
-#define glClearDepth _SAPP_QT_PROC(glClearDepthf)
+#define glClearDepth _SAPP_QT_PROC(glClearDepth)
+#define glClearDepthf _SAPP_QT_PROC(glClearDepthf)
 #define glFramebufferTexture2D _SAPP_QT_PROC(glFramebufferTexture2D)
 #define glCreateProgram _SAPP_QT_PROC(glCreateProgram)
 #define glViewport _SAPP_QT_PROC(glViewport)
@@ -1807,7 +1817,7 @@ _SOKOL_PRIVATE bool recordEvent(QEvent *ev)
         QDateTime curDt(QDateTime::currentDateTime());
         const int timeOffset = sg_recordingStartTime.daysTo(curDt) * 24 * 3600 * 1000 + sg_recordingStartTime.time().msecsTo(curDt.time());
         sg_recording.enqueue(EventDelivery(timeOffset, clonedEv));
-#ifdef DEBUG
+#if DEBUG
         if (sg_recording.size() > 1)
             qDebug() << "Recorded" << sg_recording.size() << "events.";
 #endif
@@ -1843,13 +1853,23 @@ bool SokolApplicationFilter::eventFilter(QObject *object, QEvent *event)
         {
             QMouseEvent *mouseEvent = static_cast<QMouseEvent *>(event);
             Input::registerMousePress(mouseEvent->button());
-            _sapp_qt_mouse_event(SAPP_EVENTTYPE_MOUSE_DOWN, SAPP_MOUSEBUTTON_MIDDLE);
+            if (mouseEvent->buttons() & Qt::LeftButton)
+                _sapp_qt_mouse_event(SAPP_EVENTTYPE_MOUSE_DOWN, SAPP_MOUSEBUTTON_LEFT);
+            if (mouseEvent->buttons() & Qt::RightButton)
+                _sapp_qt_mouse_event(SAPP_EVENTTYPE_MOUSE_DOWN, SAPP_MOUSEBUTTON_RIGHT);
+            if (mouseEvent->buttons() & Qt::MiddleButton)
+                _sapp_qt_mouse_event(SAPP_EVENTTYPE_MOUSE_DOWN, SAPP_MOUSEBUTTON_MIDDLE);
         }
         case QEvent::MouseButtonRelease:
         {
             QMouseEvent *mouseEvent = static_cast<QMouseEvent *>(event);
             Input::registerMouseRelease(mouseEvent->button());
-            _sapp_qt_mouse_event(SAPP_EVENTTYPE_MOUSE_UP, SAPP_MOUSEBUTTON_MIDDLE);
+            if (mouseEvent->button() == Qt::LeftButton)
+                _sapp_qt_mouse_event(SAPP_EVENTTYPE_MOUSE_UP, SAPP_MOUSEBUTTON_LEFT);
+            if (mouseEvent->button() == Qt::RightButton)
+                _sapp_qt_mouse_event(SAPP_EVENTTYPE_MOUSE_UP, SAPP_MOUSEBUTTON_RIGHT);
+            if (mouseEvent->button() == Qt::MiddleButton)
+                _sapp_qt_mouse_event(SAPP_EVENTTYPE_MOUSE_UP, SAPP_MOUSEBUTTON_MIDDLE);
         }
         case QEvent::Shortcut:
         {
@@ -1860,6 +1880,16 @@ bool SokolApplicationFilter::eventFilter(QObject *object, QEvent *event)
     }
     return QObject::eventFilter(object, event);
 } // SokolApplicationFilter
+
+const char* _sapp_qt_get_clipboard_string(void) {
+    QClipboard *clipboard = QGuiApplication::clipboard();
+    return clipboard->text().toUtf8().constData();
+}
+
+void _sapp_qt_set_clipboard_string(const char* str) {
+    QClipboard *clipboard = QGuiApplication::clipboard();
+    clipboard->setText(str);
+}
 
 _SOKOL_PRIVATE void _sapp_run(const sapp_desc* desc) {
     _SOKOL_UNUSED(desc);
@@ -2845,7 +2875,7 @@ _SOKOL_PRIVATE void _sapp_ios_touch_event(sapp_event_type type, NSSet<UITouch *>
 #endif /* __APPLE__ */
 
 /*== EMSCRIPTEN ==============================================================*/
-#if defined(__EMSCRIPTEN__) && !defined(QT_GUI_LIB)
+#if defined(__EMSCRIPTEN__)
 #if defined(SOKOL_GLES3)
 #include <GLES3/gl3.h>
 #else
@@ -5432,7 +5462,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
 #endif /* WINDOWS */
 
 /*== Android ================================================================*/
-#if defined(__ANDROID__) && !defined(QT_GUI_LIB)
+#if defined(__ANDROID__)
 #include <pthread.h>
 #include <unistd.h>
 #include <android/native_activity.h>
@@ -8117,7 +8147,9 @@ SOKOL_API_IMPL void sapp_set_clipboard_string(const char* str) {
         return;
     }
     SOKOL_ASSERT(str);
-    #if defined(__APPLE__) && defined(TARGET_OS_IPHONE) && !TARGET_OS_IPHONE
+    #if defined(QT_GUI_LIB)
+        _sapp_qt_set_clipboard_string(str);
+    #elif defined(__APPLE__) && defined(TARGET_OS_IPHONE) && !TARGET_OS_IPHONE
         _sapp_macos_set_clipboard_string(str);
     #elif defined(__EMSCRIPTEN__)
         _sapp_emsc_set_clipboard_string(str);
@@ -8133,7 +8165,9 @@ SOKOL_API_IMPL const char* sapp_get_clipboard_string(void) {
     if (!_sapp.clipboard_enabled) {
         return "";
     }
-    #if defined(__APPLE__) && defined(TARGET_OS_IPHONE) && !TARGET_OS_IPHONE
+    #if defined(QT_GUI_LIB)
+        return _sapp_qt_get_clipboard_string();
+    #elif defined(__APPLE__) && defined(TARGET_OS_IPHONE) && !TARGET_OS_IPHONE
         return _sapp_macos_get_clipboard_string();
     #elif defined(__EMSCRIPTEN__)
         return _sapp.clipboard;

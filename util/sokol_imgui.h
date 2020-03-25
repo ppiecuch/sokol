@@ -127,10 +127,12 @@
 
     --- At the start of a frame, call:
 
-        simgui_new_frame(int width, int height, double delta_time)
+        simgui_new_frame(int width, int height, float dpi_scale, double delta_time)
 
         'width' and 'height' are the dimensions of the rendering surface,
         passed to ImGui::GetIO().DisplaySize.
+
+        'dpi_scale' is the pixel scale, passed to ImGui::GetIO().DisplayFramebufferScale.
 
         'delta_time' is the frame duration passed to ImGui::GetIO().DeltaTime.
 
@@ -214,7 +216,6 @@ typedef struct simgui_desc_t {
     sg_pixel_format color_format;
     sg_pixel_format depth_format;
     int sample_count;
-    float dpi_scale;
     const char* ini_filename;
     bool no_default_font;
     bool disable_hotkeys;   /* don't let ImGui handle Ctrl-A,C,V,X,Y,Z */
@@ -338,7 +339,9 @@ static constexpr char* _simgui_vs_src =
     "    color = color0;\n"
     "}\n";
 static constexpr char* _simgui_fs_src =
+    "#ifdef GL_ES\n"
     "precision mediump float;\n"
+    "#endif\n"
     "uniform sampler2D tex;\n"
     "varying vec2 uv;\n"
     "varying vec4 color;\n"
@@ -747,7 +750,6 @@ SOKOL_API_IMPL void simgui_setup(const simgui_desc_t* desc) {
     memset(&_simgui, 0, sizeof(_simgui));
     _simgui.desc = *desc;
     _simgui.desc.max_vertices = _simgui_def(_simgui.desc.max_vertices, 65536);
-    _simgui.desc.dpi_scale = _simgui_def(_simgui.desc.dpi_scale, 1.0f);
     #if !defined(SOKOL_IMGUI_NO_SOKOL_APP)
     _simgui.is_osx = _simgui_is_osx();
     #endif
@@ -930,14 +932,15 @@ _SOKOL_PRIVATE void _simgui_set_imgui_modifiers(ImGuiIO* io, uint32_t mods) {
     io->KeySuper = (mods & SAPP_MODIFIER_SUPER) != 0;
 }
 
-SOKOL_API_IMPL void simgui_new_frame(int width, int height, double delta_time) {
+SOKOL_API_IMPL void simgui_new_frame(int width, int height, float dpi_scale, double delta_time) {
     #if defined(__cplusplus)
         ImGuiIO* io = &ImGui::GetIO();
     #else
         ImGuiIO* io = igGetIO();
     #endif
-    io->DisplaySize.x = ((float) width) / _simgui.desc.dpi_scale;
-    io->DisplaySize.y = ((float) height) / _simgui.desc.dpi_scale;
+    io->DisplaySize.x = ((float) width) / dpi_scale;
+    io->DisplaySize.y = ((float) height) / dpi_scale;
+    io->DisplayFramebufferScale = ImVec2(dpi_scale, dpi_scale);
     io->DeltaTime = (float) delta_time;
     #if !defined(SOKOL_IMGUI_NO_SOKOL_APP)
     for (int i = 0; i < SAPP_MAX_MOUSEBUTTONS; i++) {
@@ -993,21 +996,13 @@ SOKOL_API_IMPL void simgui_render(void) {
         return;
     }
 
-    const float dpi_scale = _simgui.desc.dpi_scale;
-
-    draw_data->ScaleClipRects(ImVec2(dpi_scale, dpi_scale));
+    draw_data->ScaleClipRects(io->DisplayFramebufferScale);
 
     /* render the ImGui command list */
     sg_push_debug_group("sokol-imgui");
 
-<<<<<<< HEAD
-    const int fb_width = (const int) (ImGui::GetIO().DisplaySize.x * dpi_scale);
-    const int fb_height = (const int) (ImGui::GetIO().DisplaySize.y * dpi_scale);
-=======
-    const float dpi_scale = _simgui.desc.dpi_scale;
-    const int fb_width = (const int) (io->DisplaySize.x * dpi_scale);
-    const int fb_height = (const int) (io->DisplaySize.y * dpi_scale);
->>>>>>> d86d96625d6be0171c99909187e041ae699dbbf0
+    const int fb_width = (const int) (io->DisplaySize.x * io->DisplayFramebufferScale.x);
+    const int fb_height = (const int) (io->DisplaySize.y * io->DisplayFramebufferScale.y);
     sg_apply_viewport(0, 0, fb_width, fb_height, true);
     sg_apply_scissor_rect(0, 0, fb_width, fb_height, true);
 
@@ -1072,10 +1067,17 @@ SOKOL_API_IMPL void simgui_render(void) {
                     bind.vertex_buffer_offsets[0] = vb_offset + vtx_offset;
                     sg_apply_bindings(&bind);
                 }
-                const int scissor_x = (int) (pcmd->ClipRect.x * dpi_scale);
-                const int scissor_y = (int) (pcmd->ClipRect.y * dpi_scale);
-                const int scissor_w = (int) ((pcmd->ClipRect.z - pcmd->ClipRect.x) * dpi_scale);
-                const int scissor_h = (int) ((pcmd->ClipRect.w - pcmd->ClipRect.y) * dpi_scale);
+                #if defined(QT_GUI_LIB)
+                    const int scissor_x = (int) (pcmd->ClipRect.x);
+                    const int scissor_y = (int) (pcmd->ClipRect.y);
+                    const int scissor_w = (int) ((pcmd->ClipRect.z - pcmd->ClipRect.x));
+                    const int scissor_h = (int) ((pcmd->ClipRect.w - pcmd->ClipRect.y));
+                #else
+                    const int scissor_x = (int) (pcmd->ClipRect.x * dpi_scale);
+                    const int scissor_y = (int) (pcmd->ClipRect.y * dpi_scale);
+                    const int scissor_w = (int) ((pcmd->ClipRect.z - pcmd->ClipRect.x) * dpi_scale);
+                    const int scissor_h = (int) ((pcmd->ClipRect.w - pcmd->ClipRect.y) * dpi_scale);
+                #endif
                 sg_apply_scissor_rect(scissor_x, scissor_y, scissor_w, scissor_h, true);
                 sg_draw(base_element, pcmd->ElemCount, 1);
             }
@@ -1098,7 +1100,11 @@ _SOKOL_PRIVATE bool _simgui_is_ctrl(uint32_t modifiers) {
 }
 
 SOKOL_API_IMPL bool simgui_handle_event(const sapp_event* ev) {
-    const float dpi_scale = _simgui.desc.dpi_scale;
+    #if defined(QT_GUI_LIB)
+        const float dpi_scale = 1; /* Qt events are already scaled */
+    #else
+        const float dpi_scale = _simgui.desc.dpi_scale;
+    #endif
     #if defined(__cplusplus)
         ImGuiIO* io = &ImGui::GetIO();
     #else

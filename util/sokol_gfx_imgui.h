@@ -559,7 +559,6 @@ typedef struct {
     sg_trace_hooks hooks;
 } sg_imgui_t;
 
-#ifndef SOKOL_CLASS_IMPL
 SOKOL_API_DECL void sg_imgui_init(sg_imgui_t* ctx);
 SOKOL_API_DECL void sg_imgui_discard(sg_imgui_t* ctx);
 SOKOL_API_DECL void sg_imgui_draw(sg_imgui_t* ctx);
@@ -578,18 +577,10 @@ SOKOL_API_DECL void sg_imgui_draw_shaders_window(sg_imgui_t* ctx);
 SOKOL_API_DECL void sg_imgui_draw_pipelines_window(sg_imgui_t* ctx);
 SOKOL_API_DECL void sg_imgui_draw_passes_window(sg_imgui_t* ctx);
 SOKOL_API_DECL void sg_imgui_draw_capture_window(sg_imgui_t* ctx);
-<<<<<<< HEAD
-#endif // SOKOL_CLASS_IMPL
-
-END_EXTERN_C
-=======
 SOKOL_API_DECL void sg_imgui_draw_capabilities_window(sg_imgui_t* ctx);
 
-#if defined(__cplusplus)
-} /* extern "C" */
-#endif
+END_EXTERN_C
 #endif /* SOKOL_GFX_IMGUI_INCLUDED */
->>>>>>> d86d96625d6be0171c99909187e041ae699dbbf0
 
 /*=== IMPLEMENTATION =========================================================*/
 #ifdef SOKOL_GFX_IMGUI_IMPL
@@ -2533,15 +2524,9 @@ _SOKOL_PRIVATE void _sg_imgui_show_shader(sg_imgui_t* ctx, sg_shader shd) {
 }
 
 _SOKOL_PRIVATE void _sg_imgui_draw_buffer_list(sg_imgui_t* ctx) {
-<<<<<<< HEAD
-    ImGui::BeginChild("buffer_list", ImVec2(_SG_IMGUI_LIST_WIDTH,0), true);
+    igBeginChild("buffer_list", IMVEC2(_SG_IMGUI_LIST_WIDTH,0), true, 0);
     for (int i = 0; i < ctx->buffers.num_sockets; i++) {
         sg_buffer buf = ctx->buffers.sockets[i].res_id;
-=======
-    igBeginChild("buffer_list", IMVEC2(_SG_IMGUI_LIST_WIDTH,0), true, 0);
-    for (int i = 0; i < ctx->buffers.num_slots; i++) {
-        sg_buffer buf = ctx->buffers.slots[i].res_id;
->>>>>>> d86d96625d6be0171c99909187e041ae699dbbf0
         sg_resource_state state = sg_query_buffer_state(buf);
         if ((state != SG_RESOURCESTATE_INVALID) && (state != SG_RESOURCESTATE_INITIAL)) {
             bool selected = ctx->buffers.sel_buf.id == buf.id;
@@ -2554,15 +2539,9 @@ _SOKOL_PRIVATE void _sg_imgui_draw_buffer_list(sg_imgui_t* ctx) {
 }
 
 _SOKOL_PRIVATE void _sg_imgui_draw_image_list(sg_imgui_t* ctx) {
-<<<<<<< HEAD
-    ImGui::BeginChild("image_list", ImVec2(_SG_IMGUI_LIST_WIDTH,0), true);
+    igBeginChild("image_list", IMVEC2(_SG_IMGUI_LIST_WIDTH,0), true, 0);
     for (int i = 0; i < ctx->images.num_sockets; i++) {
         sg_image img = ctx->images.sockets[i].res_id;
-=======
-    igBeginChild("image_list", IMVEC2(_SG_IMGUI_LIST_WIDTH,0), true, 0);
-    for (int i = 0; i < ctx->images.num_slots; i++) {
-        sg_image img = ctx->images.slots[i].res_id;
->>>>>>> d86d96625d6be0171c99909187e041ae699dbbf0
         sg_resource_state state = sg_query_image_state(img);
         if ((state != SG_RESOURCESTATE_INVALID) && (state != SG_RESOURCESTATE_INITIAL)) {
             bool selected = ctx->images.sel_img.id == img.id;
@@ -2575,15 +2554,9 @@ _SOKOL_PRIVATE void _sg_imgui_draw_image_list(sg_imgui_t* ctx) {
 }
 
 _SOKOL_PRIVATE void _sg_imgui_draw_shader_list(sg_imgui_t* ctx) {
-<<<<<<< HEAD
-    ImGui::BeginChild("shader_list", ImVec2(_SG_IMGUI_LIST_WIDTH,0), true);
+    igBeginChild("shader_list", IMVEC2(_SG_IMGUI_LIST_WIDTH,0), true, 0);
     for (int i = 0; i < ctx->shaders.num_sockets; i++) {
         sg_shader shd = ctx->shaders.sockets[i].res_id;
-=======
-    igBeginChild("shader_list", IMVEC2(_SG_IMGUI_LIST_WIDTH,0), true, 0);
-    for (int i = 0; i < ctx->shaders.num_slots; i++) {
-        sg_shader shd = ctx->shaders.slots[i].res_id;
->>>>>>> d86d96625d6be0171c99909187e041ae699dbbf0
         sg_resource_state state = sg_query_shader_state(shd);
         if ((state != SG_RESOURCESTATE_INVALID) && (state != SG_RESOURCESTATE_INITIAL)) {
             bool selected = ctx->shaders.sel_shd.id == shd.id;
@@ -2596,15 +2569,9 @@ _SOKOL_PRIVATE void _sg_imgui_draw_shader_list(sg_imgui_t* ctx) {
 }
 
 _SOKOL_PRIVATE void _sg_imgui_draw_pipeline_list(sg_imgui_t* ctx) {
-<<<<<<< HEAD
-    ImGui::BeginChild("pipeline_list", ImVec2(_SG_IMGUI_LIST_WIDTH,0), true);
+    igBeginChild("pipeline_list", IMVEC2(_SG_IMGUI_LIST_WIDTH,0), true, 0);
     for (int i = 1; i < ctx->pipelines.num_sockets; i++) {
         sg_pipeline pip = ctx->pipelines.sockets[i].res_id;
-=======
-    igBeginChild("pipeline_list", IMVEC2(_SG_IMGUI_LIST_WIDTH,0), true, 0);
-    for (int i = 1; i < ctx->pipelines.num_slots; i++) {
-        sg_pipeline pip = ctx->pipelines.slots[i].res_id;
->>>>>>> d86d96625d6be0171c99909187e041ae699dbbf0
         sg_resource_state state = sg_query_pipeline_state(pip);
         if ((state != SG_RESOURCESTATE_INVALID) && (state != SG_RESOURCESTATE_INITIAL)) {
             bool selected = ctx->pipelines.sel_pip.id == pip.id;
@@ -2617,15 +2584,9 @@ _SOKOL_PRIVATE void _sg_imgui_draw_pipeline_list(sg_imgui_t* ctx) {
 }
 
 _SOKOL_PRIVATE void _sg_imgui_draw_pass_list(sg_imgui_t* ctx) {
-<<<<<<< HEAD
-    ImGui::BeginChild("pass_list", ImVec2(_SG_IMGUI_LIST_WIDTH,0), true);
+    igBeginChild("pass_list", IMVEC2(_SG_IMGUI_LIST_WIDTH,0), true, 0);
     for (int i = 1; i < ctx->passes.num_sockets; i++) {
         sg_pass pass = ctx->passes.sockets[i].res_id;
-=======
-    igBeginChild("pass_list", IMVEC2(_SG_IMGUI_LIST_WIDTH,0), true, 0);
-    for (int i = 1; i < ctx->passes.num_slots; i++) {
-        sg_pass pass = ctx->passes.slots[i].res_id;
->>>>>>> d86d96625d6be0171c99909187e041ae699dbbf0
         sg_resource_state state = sg_query_pass_state(pass);
         if ((state != SG_RESOURCESTATE_INVALID) && (state != SG_RESOURCESTATE_INITIAL)) {
             bool selected = ctx->passes.sel_pass.id == pass.id;
@@ -2683,13 +2644,8 @@ _SOKOL_PRIVATE void _sg_imgui_draw_buffer_panel(sg_imgui_t* ctx, sg_buffer buf) 
         igBeginChild("buffer", IMVEC2(0,0), false, 0);
         sg_buffer_info info = sg_query_buffer_info(buf);
         if (info.slot.state == SG_RESOURCESTATE_VALID) {
-<<<<<<< HEAD
             const sg_imgui_buffer_t* buf_ui = &ctx->buffers.sockets[_sg_imgui_slot_index(buf.id)];
-            ImGui::Text("Label: %s", buf_ui->label.buf[0] ? buf_ui->label.buf : "---");
-=======
-            const sg_imgui_buffer_t* buf_ui = &ctx->buffers.slots[_sg_imgui_slot_index(buf.id)];
             igText("Label: %s", buf_ui->label.buf[0] ? buf_ui->label.buf : "---");
->>>>>>> d86d96625d6be0171c99909187e041ae699dbbf0
             _sg_imgui_draw_resource_slot(&info.slot);
             igSeparator();
             igText("Type:  %s", _sg_imgui_buffertype_string(buf_ui->desc.type));
@@ -2854,13 +2810,8 @@ _SOKOL_PRIVATE void _sg_imgui_draw_shader_panel(sg_imgui_t* ctx, sg_shader shd) 
         igBeginChild("shader", IMVEC2(0,0), false, ImGuiWindowFlags_HorizontalScrollbar);
         sg_shader_info info = sg_query_shader_info(shd);
         if (info.slot.state == SG_RESOURCESTATE_VALID) {
-<<<<<<< HEAD
             const sg_imgui_shader_t* shd_ui = &ctx->shaders.sockets[_sg_imgui_slot_index(shd.id)];
-            ImGui::Text("Label: %s", shd_ui->label.buf[0] ? shd_ui->label.buf : "---");
-=======
-            const sg_imgui_shader_t* shd_ui = &ctx->shaders.slots[_sg_imgui_slot_index(shd.id)];
             igText("Label: %s", shd_ui->label.buf[0] ? shd_ui->label.buf : "---");
->>>>>>> d86d96625d6be0171c99909187e041ae699dbbf0
             _sg_imgui_draw_resource_slot(&info.slot);
             igSeparator();
             if (igTreeNodeStr("Attrs")) {
@@ -2972,13 +2923,8 @@ _SOKOL_PRIVATE void _sg_imgui_draw_pipeline_panel(sg_imgui_t* ctx, sg_pipeline p
         igBeginChild("pipeline", IMVEC2(0,0), false, 0);
         sg_pipeline_info info = sg_query_pipeline_info(pip);
         if (info.slot.state == SG_RESOURCESTATE_VALID) {
-<<<<<<< HEAD
             const sg_imgui_pipeline_t* pip_ui = &ctx->pipelines.sockets[_sg_imgui_slot_index(pip.id)];
-            ImGui::Text("Label: %s", pip_ui->label.buf[0] ? pip_ui->label.buf : "---");
-=======
-            const sg_imgui_pipeline_t* pip_ui = &ctx->pipelines.slots[_sg_imgui_slot_index(pip.id)];
             igText("Label: %s", pip_ui->label.buf[0] ? pip_ui->label.buf : "---");
->>>>>>> d86d96625d6be0171c99909187e041ae699dbbf0
             _sg_imgui_draw_resource_slot(&info.slot);
             igSeparator();
             igText("Shader:    "); igSameLine(0,-1);
@@ -3026,13 +2972,8 @@ _SOKOL_PRIVATE void _sg_imgui_draw_pass_panel(sg_imgui_t* ctx, sg_pass pass) {
         igBeginChild("pass", IMVEC2(0,0), false, 0);
         sg_pass_info info = sg_query_pass_info(pass);
         if (info.slot.state == SG_RESOURCESTATE_VALID) {
-<<<<<<< HEAD
             sg_imgui_pass_t* pass_ui = &ctx->passes.sockets[_sg_imgui_slot_index(pass.id)];
-            ImGui::Text("Label: %s", pass_ui->label.buf[0] ? pass_ui->label.buf : "---");
-=======
-            sg_imgui_pass_t* pass_ui = &ctx->passes.slots[_sg_imgui_slot_index(pass.id)];
             igText("Label: %s", pass_ui->label.buf[0] ? pass_ui->label.buf : "---");
->>>>>>> d86d96625d6be0171c99909187e041ae699dbbf0
             _sg_imgui_draw_resource_slot(&info.slot);
             for (int i = 0; i < SG_MAX_COLOR_ATTACHMENTS; i++) {
                 if (pass_ui->desc.color_attachments[i].image.id == SG_INVALID_ID) {
