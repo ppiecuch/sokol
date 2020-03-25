@@ -6,7 +6,7 @@ Simple
 [STB-style](https://github.com/nothings/stb/blob/master/docs/stb_howto.txt)
 cross-platform libraries for C and C++, written in C.
 
-[See what's new](#updates) (**02-Dec-2019**: initial clipboard support in sokol_app.h)
+[See what's new](#updates) (**30-Jan-2020**: some internal code cleanup in sokol_gfx.h)
 
 [Live Samples](https://floooh.github.io/sokol-html5/index.html) via WASM.
 
@@ -190,8 +190,8 @@ separate sokol.c/.m implementation file which is necessary
 to split the Objective-C code from the C code of the sample):
 
 ```cpp
-#include "sokol_gfx.h"
 #include "sokol_app.h"
+#include "sokol_gfx.h"
 
 sg_pass_action pass_action;
 
@@ -352,7 +352,7 @@ static void frame(void) {
 }
 
 // the response callback is where the interesting stuff happens:
-static void reponse_callback(const sfetch_response_t* response) {
+static void response_callback(const sfetch_response_t* response) {
     if (response->fetched) {
         // data has been loaded into the provided buffer, do something
         // with the data...
@@ -487,10 +487,15 @@ Mainly some "missing features" for desktop apps:
 
 # Updates
 
+- **30-Jan-2020**: Some cleanup in sokol_gfx.h in the backend implementation code,
+    internal data structures and documentation comments. The public
+    API hasn't changed, so the change should be completely invisible
+    from the outside.
+
 - **02-Dec-2019**: Initial clipboard support in sokol_app.h for Windows, macOS
     and HTML5. This allows to read and write UTF-8 encoded strings from and
-    to the target platform's shared clipboard. 
-    
+    to the target platform's shared clipboard.
+
     A 'real-world' example usage is in the [Visual6502 Remix project](https://github.com/floooh/v6502r).
 
     Unfortunately clipboard support on the HTML5 platform comes with a lot of
@@ -498,13 +503,13 @@ Mainly some "missing features" for desktop apps:
     because of the restrictions the web platform puts on clipboard access and
     different behaviours and support levels of the various HTML5 clipboard
     APIs. I'm not really happy with the current HTML5 clipboard
-    implementation. It sorta works, but it sure ain't pretty :) 
-    
+    implementation. It sorta works, but it sure ain't pretty :)
+
     Maybe the situation will improve in a few years when all browsers agree
     on and support the new [permission-based clipboard
     API](https://developer.mozilla.org/en-US/docs/Web/API/Clipboard_API).
 
-    For documention of the clipboard feature, search for CLIPBOARD SUPPORT
+    For documentation of the clipboard feature, search for CLIPBOARD SUPPORT
     in sokol_app.h
 
 - **08-Sep-2019**: sokol_gfx.h now supports clamp-to-border texture sampling:
@@ -752,7 +757,7 @@ layout definition in sg_pipeline_desc works:
 
     Vertex component names and semantics (needed by the GLES2 and D3D11 backends) have moved from ```sg_pipeline_desc``` into ```sg_shader_desc```.
 
-    This may seem like a rather pointless small detail to change, expecially
+    This may seem like a rather pointless small detail to change, especially
     for breaking existing code, but the whole thing will make a bit more
     sense when the new shader-cross-compiler will be integrated which I'm
     currently working on (here: https://github.com/floooh/sokol-tools).
@@ -765,7 +770,7 @@ layout definition in sg_pipeline_desc works:
     vertex-component **slots**. Instead of (optionally) mapping this
     association through a name, the pipeline's vertex layout is now always
     strictly defined in terms of numeric 'bind slots' for **all** sokol_gfx.h
-    backends. For 3D APIs where the vertex component slot isn't explicitely
+    backends. For 3D APIs where the vertex component slot isn't explicitly
     defined in the shader language (GLES2/WebGL, D3D11, and optionally
     GLES3/GL), the shader merely offers a lookup table how vertex-layout
     slot-indices map to names/semantics (and the underlying 3D API than maps
@@ -893,7 +898,7 @@ pipeline-state-objects), along with a couple of other minor API tweaks.
     sgl_pop_pipeline();
     ```
 
-    You can also load the 'default pipeline' explicitely on the top of the
+    You can also load the 'default pipeline' explicitly on the top of the
     pipeline stack with ```sgl_default_pipeline()```.
 
     The other API change is:

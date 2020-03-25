@@ -61,7 +61,7 @@
     - creates a window and 3D-API context/device with a 'default framebuffer'
     - makes the rendered frame visible
     - provides keyboard-, mouse- and low-level touch-events
-    - platforms: MacOS, iOS, HTML5, Win32, Linux, Android (RaspberryPi)
+    - platforms: MacOS, iOS, HTML5, Win32, Linux, Android (TODO: RaspberryPi)
     - 3D-APIs: Metal, D3D11, GL3.2, GLES2, GLES3, WebGL, WebGL2
 
     FEATURE/PLATFORM MATRIX
@@ -106,7 +106,6 @@
     TODO
     ====
     - Linux clipboard support
-    - document sapp_consume_event()
     - sapp_consume_event() on non-web platforms?
 
     STEP BY STEP
@@ -272,6 +271,21 @@
             - the application window was resized, iconified or restored
             - the application was suspended or restored (on mobile platforms)
             - the user or application code has asked to quit the application
+            - a string was pasted to the system clipboard
+
+        To explicitly 'consume' an event and prevent that the event is
+        forwarded for further handling to the operating system, call
+        sapp_consume_event() from inside the event handler (NOTE that
+        this behaviour is currently only implemented for some HTML5
+        events, support for other platforms and event types will
+        be added as needed, please open a github ticket and/or provide
+        a PR if needed).
+
+        NOTE: Do *not* call any 3D API functions in the event callback
+        function, since the 3D API context may not be active when the
+        event callback is called (it may work on some platforms and
+        3D APIs, but not others, and the exact behaviour may change
+        between sokol-app versions).
 
     --- Implement the cleanup-callback function, this is called once
         after the user quits the application (see the section
@@ -818,7 +832,7 @@ SOKOL_API_DECL sapp_desc sapp_query_desc(void);
 SOKOL_API_DECL void sapp_request_quit(void);
 /* cancel a pending quit (when SAPP_EVENTTYPE_QUIT_REQUESTED has been received) */
 SOKOL_API_DECL void sapp_cancel_quit(void);
-/* intiate a "hard quit" (quit application without sending SAPP_EVENTTYPE_QUIT_REQUSTED) */
+/* initiate a "hard quit" (quit application without sending SAPP_EVENTTYPE_QUIT_REQUSTED) */
 SOKOL_API_DECL void sapp_quit(void);
 /* call from inside event callback to consume the current event (don't forward to platform) */
 SOKOL_API_DECL void sapp_consume_event(void);
@@ -2377,6 +2391,16 @@ _SOKOL_PRIVATE void _sapp_macos_app_event(sapp_event_type type) {
 }
 - (void)rightMouseUp:(NSEvent*)event {
     _sapp_macos_mouse_event(SAPP_EVENTTYPE_MOUSE_UP, SAPP_MOUSEBUTTON_RIGHT, _sapp_macos_mod(event.modifierFlags));
+}
+- (void)otherMouseDown:(NSEvent*)event {
+    if (2 == event.buttonNumber) {
+        _sapp_macos_mouse_event(SAPP_EVENTTYPE_MOUSE_DOWN, SAPP_MOUSEBUTTON_MIDDLE, _sapp_macos_mod(event.modifierFlags));
+    }
+}
+- (void)otherMouseUp:(NSEvent*)event {
+    if (2 == event.buttonNumber) {
+        _sapp_macos_mouse_event(SAPP_EVENTTYPE_MOUSE_UP, SAPP_MOUSEBUTTON_MIDDLE, _sapp_macos_mod(event.modifierFlags));
+    }
 }
 - (void)mouseMoved:(NSEvent*)event {
     _sapp_macos_mouse_event(SAPP_EVENTTYPE_MOUSE_MOVE, SAPP_MOUSEBUTTON_INVALID , _sapp_macos_mod(event.modifierFlags));
@@ -4974,16 +4998,16 @@ _SOKOL_PRIVATE bool _sapp_win32_update_dimensions(void) {
 
 _SOKOL_PRIVATE uint32_t _sapp_win32_mods(void) {
     uint32_t mods = 0;
-    if (GetKeyState(VK_SHIFT) & (1<<31)) {
+    if (GetKeyState(VK_SHIFT) & (1<<15)) {
         mods |= SAPP_MODIFIER_SHIFT;
     }
-    if (GetKeyState(VK_CONTROL) & (1<<31)) {
+    if (GetKeyState(VK_CONTROL) & (1<<15)) {
         mods |= SAPP_MODIFIER_CTRL;
     }
-    if (GetKeyState(VK_MENU) & (1<<31)) {
+    if (GetKeyState(VK_MENU) & (1<<15)) {
         mods |= SAPP_MODIFIER_ALT;
     }
-    if ((GetKeyState(VK_LWIN) | GetKeyState(VK_RWIN)) & (1<<31)) {
+    if ((GetKeyState(VK_LWIN) | GetKeyState(VK_RWIN)) & (1<<15)) {
         mods |= SAPP_MODIFIER_SUPER;
     }
     return mods;
@@ -7149,6 +7173,7 @@ static const struct _sapp_x11_codepair {
 };
 
 _SOKOL_PRIVATE int _sapp_x11_error_handler(Display* display, XErrorEvent* event) {
+    _SOKOL_UNUSED(display);
     _sapp_x11_error_code = event->error_code;
     return 0;
 }

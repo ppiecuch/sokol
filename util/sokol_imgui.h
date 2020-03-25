@@ -291,12 +291,12 @@ typedef struct {
     sg_image img;
     sg_shader shd;
     sg_pipeline pip;
+    bool is_osx;    // return true if running on OSX (or HTML5 OSX), needed for copy/paste
     #if !defined(SOKOL_IMGUI_NO_SOKOL_APP)
     bool btn_down[SAPP_MAX_MOUSEBUTTONS];
     bool btn_up[SAPP_MAX_MOUSEBUTTONS];
     uint8_t keys_down[SIMGUI_MAX_KEY_VALUE];     // bits 0..3 or modifiers, != 0 is key-down
     uint8_t keys_up[SIMGUI_MAX_KEY_VALUE];       // same is keys_down
-    bool is_osx;                // return true if running on OSX (or HTML5 OSX), needed for copy/paste
     #endif
 } _simgui_state_t;
 static _simgui_state_t _simgui;
@@ -722,6 +722,7 @@ static const char* _simgui_get_clipboard(void* user_data) {
     (void)user_data;
     return sapp_get_clipboard_string();
 }
+#endif
 
 #if defined(__EMSCRIPTEN__)
 EM_JS(int, simgui_js_is_osx, (void), {
@@ -743,7 +744,6 @@ static bool _simgui_is_osx(void) {
     return false;
     #endif
 }
-#endif
 
 SOKOL_API_IMPL void simgui_setup(const simgui_desc_t* desc) {
     SOKOL_ASSERT(desc);
@@ -925,12 +925,14 @@ SOKOL_API_IMPL void simgui_shutdown(void) {
     sg_destroy_buffer(_simgui.vbuf);
 }
 
+#if !defined(SOKOL_IMGUI_NO_SOKOL_APP)
 _SOKOL_PRIVATE void _simgui_set_imgui_modifiers(ImGuiIO* io, uint32_t mods) {
     io->KeyAlt = (mods & SAPP_MODIFIER_ALT) != 0;
     io->KeyCtrl = (mods & SAPP_MODIFIER_CTRL) != 0;
     io->KeyShift = (mods & SAPP_MODIFIER_SHIFT) != 0;
     io->KeySuper = (mods & SAPP_MODIFIER_SUPER) != 0;
 }
+#endif
 
 SOKOL_API_IMPL void simgui_new_frame(int width, int height, float dpi_scale, double delta_time) {
     #if defined(__cplusplus)
@@ -1001,8 +1003,14 @@ SOKOL_API_IMPL void simgui_render(void) {
     /* render the ImGui command list */
     sg_push_debug_group("sokol-imgui");
 
+#if defined(QT_GUI_LIB)
     const int fb_width = (const int) (io->DisplaySize.x * io->DisplayFramebufferScale.x);
     const int fb_height = (const int) (io->DisplaySize.y * io->DisplayFramebufferScale.y);
+#else
+    const float dpi_scale = _simgui.desc.dpi_scale;
+    const int fb_width = (int) (io->DisplaySize.x * dpi_scale);
+    const int fb_height = (int) (io->DisplaySize.y * dpi_scale);
+#endif
     sg_apply_viewport(0, 0, fb_width, fb_height, true);
     sg_apply_scissor_rect(0, 0, fb_width, fb_height, true);
 
@@ -1017,6 +1025,8 @@ SOKOL_API_IMPL void simgui_render(void) {
     bind.index_buffer = _simgui.ibuf;
     ImTextureID tex_id = io->Fonts->TexID;
     bind.fs_images[0].id = (uint32_t)(uintptr_t)tex_id;
+    uint32_t vb_offset = 0;
+    uint32_t ib_offset = 0;
     for (int cl_index = 0; cl_index < draw_data->CmdListsCount; cl_index++) {
         ImDrawList* cl = draw_data->CmdLists[cl_index];
 
@@ -1032,8 +1042,12 @@ SOKOL_API_IMPL void simgui_render(void) {
             const ImDrawVert* vtx_ptr = cl->VtxBuffer.Data;
             const ImDrawIdx* idx_ptr = cl->IdxBuffer.Data;
         #endif
-        const uint32_t vb_offset = sg_append_buffer(bind.vertex_buffers[0], vtx_ptr, vtx_size);
-        const uint32_t ib_offset = sg_append_buffer(bind.index_buffer, idx_ptr, idx_size);
+        if (vtx_ptr) {
+            vb_offset = sg_append_buffer(bind.vertex_buffers[0], vtx_ptr, vtx_size);
+        }
+        if (idx_ptr) {
+            ib_offset = sg_append_buffer(bind.index_buffer, idx_ptr, idx_size);
+        }
         /* don't render anything if the buffer is in overflow state (this is also
             checked internally in sokol_gfx, draw calls that attempt to draw with
             overflowed buffers will be silently dropped)
@@ -1058,6 +1072,11 @@ SOKOL_API_IMPL void simgui_render(void) {
             ImDrawCmd* pcmd = &cl->CmdBuffer.Data[cmd_index];
             if (pcmd->UserCallback) {
                 pcmd->UserCallback(cl, pcmd);
+                // need to re-apply all state after calling a user callback
+                sg_apply_viewport(0, 0, fb_width, fb_height, true);
+                sg_apply_pipeline(_simgui.pip);
+                sg_apply_uniforms(SG_SHADERSTAGE_VS, 0, &vs_params, sizeof(vs_params));
+                sg_apply_bindings(&bind);
             }
             else {
                 if ((tex_id != pcmd->TextureId) || (vtx_offset != pcmd->VtxOffset)) {
