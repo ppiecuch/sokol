@@ -1967,6 +1967,10 @@ bool SokolApplicationFilter::eventFilter(QObject *object, QEvent *event)
     return QObject::eventFilter(object, event);
 } // SokolApplicationFilter
 
+void _sapp_qt_show_mouse(bool shown) {
+    // TODO
+}
+
 const char* _sapp_qt_get_clipboard_string(void) {
     QClipboard *clipboard = QGuiApplication::clipboard();
     return clipboard->text().toUtf8().constData();
@@ -8468,7 +8472,9 @@ SOKOL_API_IMPL bool sapp_keyboard_shown(void) {
 }
 
 SOKOL_API_IMPL void sapp_show_mouse(bool shown) {
-    #if defined(__APPLE__) && !TARGET_OS_IPHONE
+    #if defined(QT_GUI_LIB)
+    _sapp_qt_show_mouse(shown);
+    #elif defined(__APPLE__) && !TARGET_OS_IPHONE
     _sapp_macos_show_mouse(shown);
     #elif defined(_WIN32)
     _sapp_win32_show_mouse(shown);

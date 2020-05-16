@@ -19,6 +19,11 @@
 #include <alloca.h>
 #include <math.h>
 
+#define SOKOL_IMPL
+
+#include "sokol_gfx.h"
+#include "dbgui/dbgui.h"
+
 class SleepSimulator {
     QMutex localMutex;
     QWaitCondition sleepSimulator;
@@ -51,7 +56,6 @@ class GLWindow : public QOpenGLWindow
 
     sg_pipeline pip;
     sg_bindings bind;
-    sg_pass_action pass_action;
 
   public:
     QPoint cursorPos;
@@ -110,6 +114,8 @@ class GLWindow : public QOpenGLWindow
 
         /* setup sokol_gfx */
         sg_desc desc{0}; sg_setup(&desc);
+
+        assert(sg_isvalid());
 
         /* a vertex buffer */
         const float vertices[] = {
@@ -179,9 +185,6 @@ class GLWindow : public QOpenGLWindow
         };
         pip = sg_make_pipeline(&pipeline_desc);
 
-        /* default pass action (clear to grey) */
-        pass_action = { 0 };
-
         /* validate sapp state */
         _sapp.desc = {
             .event_cb = __dbgui_event,
@@ -240,6 +243,7 @@ class GLWindow : public QOpenGLWindow
     }
     void render() {
         /* draw loop */
+        sg_pass_action pass_action = { 0 };
         sg_begin_default_pass(&pass_action, sapp_width(), sapp_height());
         sg_apply_pipeline(pip);
         sg_apply_bindings(&bind);
