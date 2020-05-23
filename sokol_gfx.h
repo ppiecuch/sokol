@@ -2468,8 +2468,17 @@ END_EXTERN_C
     #if !__has_feature(objc_arc)
     #error "Please enable ARC when using the Metal backend"
     #endif
-    #include <TargetConditionals.h>
     #import <Metal/Metal.h>
+#elif defined(SOKOL_WGPU)
+    #if defined(__EMSCRIPTEN__)
+        #include <webgpu/webgpu.h>
+    #else
+        #include <dawn/webgpu.h>
+    #endif
+#endif
+
+#if defined(__APPLE__)
+    #include <TargetConditionals.h>
     #if defined(TARGET_OS_IPHONE) && !TARGET_OS_IPHONE
         #define _SG_TARGET_MACOS (1)
     #else
@@ -2478,13 +2487,7 @@ END_EXTERN_C
             #define _SG_TARGET_IOS_SIMULATOR (1)
         #endif
     #endif
-#elif defined(SOKOL_WGPU)
-    #if defined(__EMSCRIPTEN__)
-        #include <webgpu/webgpu.h>
-    #else
-        #include <dawn/webgpu.h>
-    #endif
-#endif
+#endif // __APPLE__
 
 /*=== COMMON BACKEND STUFF ===================================================*/
 
@@ -6154,10 +6157,10 @@ _SOKOL_PRIVATE void _sg_gl_begin_pass(_sg_pass_t* pass, const sg_pass_action* ac
         }
         if (action->depth.action == SG_ACTION_CLEAR) {
             clear_mask |= GL_DEPTH_BUFFER_BIT;
-            #ifdef SOKOL_GLCORE33
-            glClearDepth(action->depth.val);
-            #else
+            #if defined(SOKOL_GLES2) && !defined(_SG_TARGET_MACOS)
             glClearDepthf(action->depth.val);
+            #else
+            glClearDepth(action->depth.val);
             #endif
         }
         if (action->stencil.action == SG_ACTION_CLEAR) {
